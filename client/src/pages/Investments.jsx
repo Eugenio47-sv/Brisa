@@ -234,13 +234,6 @@ export default function Investments({ data, mutate, setModal, notify, user }) {
         </div>
       )}
       {error && <p className="error">{error}</p>}
-      {inv.cost_incomplete && (
-        <div className="alert warning">
-          Tienes unidades registradas sin costo de compra. El valor de mercado
-          se calculará con la última cotización disponible; las ganancias quedan
-          pendientes hasta que completes el costo real.
-        </div>
-      )}
       <div className="stats-grid">
         <Stat
           label="Valor del portafolio"
