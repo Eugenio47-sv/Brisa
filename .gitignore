@@ -1,0 +1,14 @@
+node_modules/
+client/dist/
+.env
+.env.*
+!.env.example
+*.log
+.demo-data/
+coverage/
+backups/
+*.backup
+*.dump
+brisa-respaldo*.json
+brisa-completo*.csv
+movimientos*.csv

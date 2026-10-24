@@ -1,0 +1,33 @@
+{
+  "name": "brisa-finanzas",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "dev": "concurrently -k \"npm run dev -w server\" \"npm run dev -w client\"",
+    "build": "npm run build -w client",
+    "start": "npm run start -w server",
+    "test": "npm run test -w server",
+    "hash-password": "node server/scripts/hash-password.js",
+    "seed": "node server/scripts/seed.js",
+    "migrate": "node server/scripts/migrate.js",
+    "setup:local": "node server/scripts/setup-local.js",
+    "preview:demo": "node server/scripts/demo.js"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.3.14",
+    "concurrently": "9.1.2",
+    "prettier": "3.5.3",
+    "supertest": "7.1.4"
+  },
+  "overrides": {
+    "postcss-selector-parser": "7.1.6"
+  }
+}
