@@ -168,7 +168,7 @@ export function Progress({ value = 0, level = "good" }) {
     </div>
   );
 }
-export function Stat({ label, value, foot, positive, icon }) {
+export function Stat({ label, value, valueLabel, foot, positive, icon }) {
   return (
     <Card className="stat">
       <div className="stat-label">
@@ -180,7 +180,7 @@ export function Stat({ label, value, foot, positive, icon }) {
           positive === true ? "positive" : positive === false ? "negative" : ""
         }
       >
-        {usd(value)}
+        {valueLabel ?? usd(value)}
       </strong>
       <small>{foot}</small>
     </Card>

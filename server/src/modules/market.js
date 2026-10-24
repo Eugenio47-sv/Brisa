@@ -86,7 +86,7 @@ export function createMarket(db, config, fetcher = fetch) {
       const status = await cached("market-status", 120000, () =>
         request("stock/market-status", { exchange: "US" }),
       );
-      if (status.stale || !status.data.isOpen)
+      if (status.stale)
         return {
           message: status.stale
             ? "No se pudo verificar si el mercado está abierto. Se conservan los precios."
@@ -94,7 +94,7 @@ export function createMarket(db, config, fetcher = fetch) {
         };
       const symbols = (
         await db.query(
-          "SELECT symbol FROM trades UNION SELECT symbol FROM watchlist",
+          "SELECT symbol FROM trades UNION SELECT symbol FROM watchlist UNION SELECT symbol FROM initial_holdings",
         )
       ).rows;
       let updated = 0,
@@ -105,7 +105,11 @@ export function createMarket(db, config, fetcher = fetch) {
             symbol,
           ])
         ).rows[0];
-        if (old && Date.now() - new Date(old.updated_at).getTime() < 180000)
+        if (
+          old &&
+          (!status.data.isOpen ||
+            Date.now() - new Date(old.updated_at).getTime() < 180000)
+        )
           continue;
         try {
           const q = await request("quote", { symbol });
@@ -127,9 +131,12 @@ export function createMarket(db, config, fetcher = fetch) {
       return {
         updated,
         errors,
-        message: errors
-          ? `${updated} precios actualizados; ${errors} consultas no disponibles. Se conserva la caché.`
-          : `${updated} precios actualizados.`,
+        message:
+          !status.data.isOpen && !updated && !errors
+            ? "El mercado de EE. UU. está cerrado. Se conservan los últimos precios."
+            : errors
+              ? `${updated} precios actualizados; ${errors} consultas no disponibles. Se conserva la caché.`
+              : `${updated} precios actualizados.`,
       };
     } finally {
       refreshing = false;

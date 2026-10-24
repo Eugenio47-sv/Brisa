@@ -185,6 +185,9 @@ export default function Overview({ data, setTab, setModal, mutate }) {
             <span className="live-dot">Tu balance actual</span>
           </div>
           <h2>{usd(data.net_worth)}</h2>
+          {data.investments.value_incomplete && (
+            <p>Patrimonio parcial: falta cotizar una tenencia inicial.</p>
+          )}
           <p>
             {data.month_change === null ? (
               <span>Construyendo tu historial mensual</span>
@@ -273,6 +276,9 @@ export default function Overview({ data, setTab, setModal, mutate }) {
         />
         <Stat
           label="Resultado de inversiones"
+          valueLabel={
+            data.investments.cost_incomplete ? "Costo pendiente" : undefined
+          }
           value={
             Number(data.investments.realized) +
             Number(data.investments.unrealized)

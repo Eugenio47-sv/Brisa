@@ -86,6 +86,19 @@ export async function migrate(db, hash) {
       await c.query("CREATE INDEX dividends_date ON dividends(date)");
       await c.query("INSERT INTO schema_migrations(version) VALUES ($1)", [4]);
     }
+    if (
+      !(
+        await c.query(
+          "SELECT version FROM schema_migrations WHERE version=$1",
+          [5],
+        )
+      ).rows.length
+    ) {
+      await c.query(
+        "CREATE TABLE initial_holdings (symbol varchar(20) PRIMARY KEY, quantity numeric(22,8) NOT NULL CHECK(quantity>0), total_cost numeric(14,2) CHECK(total_cost>0))",
+      );
+      await c.query("INSERT INTO schema_migrations(version) VALUES ($1)", [5]);
+    }
     const names = [
       "Comida",
       "Transporte",

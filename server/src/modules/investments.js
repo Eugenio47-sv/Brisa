@@ -14,7 +14,24 @@ import {
   fail,
   today,
 } from "../lib.js";
+async function initialTrades(db) {
+  return (
+    await db.query("SELECT * FROM initial_holdings ORDER BY symbol")
+  ).rows.map((h, i) => ({
+    symbol: h.symbol,
+    quantity: h.quantity,
+    price: h.total_cost ? D(h.total_cost).div(h.quantity).toString() : "0",
+    fee: "0",
+    side: "buy",
+    date: "0001-01-01",
+    id: -2147483647 + i,
+    cost_unknown: !h.total_cost,
+  }));
+}
 export async function investments(db) {
+  const initialHoldings = (
+    await db.query("SELECT * FROM initial_holdings ORDER BY symbol")
+  ).rows;
   const dividends = (
     await db.query(
       "SELECT d.*,d.date::text,a.name AS account FROM dividends d JOIN accounts a ON a.id=d.account_id ORDER BY d.date DESC,d.id DESC",
@@ -32,27 +49,76 @@ export async function investments(db) {
       q,
     ]),
   );
-  const positions = portfolio(trades, quotes);
-  const value = sum(positions.map((p) => p.value));
+  const positions = portfolio(
+    [...(await initialTrades(db)), ...trades],
+    quotes,
+  );
+  const value = sum(positions.map((p) => p.value ?? "0"));
   return {
     positions: positions.map((p) => ({
       ...p,
       weight: value.gt(0) ? D(p.value).div(value).mul(100).toNumber() : 0,
     })),
     trades,
+    initial_holdings: initialHoldings,
+    cost_incomplete: positions.some((p) => p.cost_unknown),
+    value_incomplete: positions.some((p) => p.value === null),
     dividends,
     dividends_total: money(paidDividends),
     dividends_pending: money(
       sum(dividends.filter((d) => !d.paid).map((d) => d.amount)),
     ),
     value: money(value),
-    realized: money(sum(positions.map((p) => p.realized)).plus(paidDividends)),
-    unrealized: money(sum(positions.map((p) => p.unrealized))),
-    cost: money(sum(positions.map((p) => p.cost))),
+    realized: money(
+      sum(positions.map((p) => p.realized ?? "0")).plus(paidDividends),
+    ),
+    unrealized: money(sum(positions.map((p) => p.unrealized ?? "0"))),
+    cost: money(sum(positions.map((p) => p.cost ?? "0"))),
   };
 }
 export function investmentRouter(db, market) {
   const r = Router();
+  r.put("/initial-holdings/:symbol", async (req, res) => {
+    const symbol = symbolSchema.parse(req.params.symbol);
+    const v = z
+      .object({
+        quantity: z
+          .string()
+          .regex(/^\d{1,12}(\.\d{1,8})?$/)
+          .pipe(z.string().refine((v) => D(v).gt(0))),
+        total_cost: amountSchema.nullable(),
+      })
+      .strict()
+      .parse(req.body);
+    await db.tx(async (c) => {
+      await c.query("SELECT pg_advisory_xact_lock(71622)");
+      await c.query(
+        "INSERT INTO initial_holdings(symbol,quantity,total_cost) VALUES ($1,$2,$3) ON CONFLICT(symbol) DO UPDATE SET quantity=EXCLUDED.quantity,total_cost=EXCLUDED.total_cost",
+        [symbol, v.quantity, v.total_cost],
+      );
+      portfolio([
+        ...(await initialTrades(c)),
+        ...(
+          await c.query(
+            "SELECT *,date::text FROM trades ORDER BY trades.date,id",
+          )
+        ).rows,
+      ]);
+    });
+    res.json({ ok: true });
+  });
+  r.delete("/positions/:symbol", async (req, res) => {
+    const symbol = symbolSchema.parse(req.params.symbol);
+    await db.tx(async (c) => {
+      await c.query("SELECT pg_advisory_xact_lock(71622)");
+      await c.query("DELETE FROM trades WHERE symbol=$1", [symbol]);
+      await c.query("DELETE FROM dividends WHERE symbol=$1", [symbol]);
+      await c.query("DELETE FROM initial_holdings WHERE symbol=$1", [symbol]);
+      await c.query("DELETE FROM watchlist WHERE symbol=$1", [symbol]);
+      await c.query("DELETE FROM quote_cache WHERE symbol=$1", [symbol]);
+    });
+    res.json({ ok: true });
+  });
   const dividendSchema = z
     .object({
       symbol: symbolSchema,
@@ -133,6 +199,7 @@ export function investmentRouter(db, market) {
       if (id && !rows.some((t) => t.id === id))
         throw fail("Operación no encontrada.", 404);
       portfolio([
+        ...(await initialTrades(c)),
         ...rows.filter((t) => t.id !== id),
         { ...v, id: id || 2147483647 },
       ]);
@@ -172,7 +239,10 @@ export function investmentRouter(db, market) {
       ).rows;
       if (!rows.some((t) => t.id === id))
         throw fail("Operación no encontrada.", 404);
-      portfolio(rows.filter((t) => t.id !== id));
+      portfolio([
+        ...(await initialTrades(c)),
+        ...rows.filter((t) => t.id !== id),
+      ]);
       await c.query("DELETE FROM trades WHERE id=$1", [id]);
     });
     res.json({ ok: true });

@@ -67,6 +67,7 @@ export function portfolio(trades, quotes = {}) {
       cost: D(0),
       realized: D(0),
     });
+    if (t.cost_unknown) p.cost_unknown = true;
     const qty = D(t.quantity),
       value = qty.mul(t.price);
     if (t.side === "buy") {
@@ -91,15 +92,18 @@ export function portfolio(trades, quotes = {}) {
     return {
       symbol: p.symbol,
       quantity: p.quantity.toFixed(8),
-      cost: money(p.cost),
-      average: money(average),
-      value: money(value),
-      price: money(price),
-      realized: money(p.realized),
-      unrealized: money(value.minus(p.cost)),
-      percent: p.cost.gt(0)
-        ? value.minus(p.cost).div(p.cost).mul(100).toFixed(2)
-        : "0",
+      cost_unknown: !!p.cost_unknown,
+      cost: p.cost_unknown ? null : money(p.cost),
+      average: p.cost_unknown ? null : money(average),
+      value: p.cost_unknown && !q ? null : money(value),
+      price: p.cost_unknown && !q ? null : money(price),
+      realized: p.cost_unknown ? null : money(p.realized),
+      unrealized: p.cost_unknown ? null : money(value.minus(p.cost)),
+      percent: p.cost_unknown
+        ? null
+        : p.cost.gt(0)
+          ? value.minus(p.cost).div(p.cost).mul(100).toFixed(2)
+          : "0",
       quote: q || null,
       estimated: !q,
     };

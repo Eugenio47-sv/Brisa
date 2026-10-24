@@ -87,6 +87,8 @@ export function createApp(db, config) {
           await c.query("SELECT *,next_date::text FROM recurring_rules")
         ).rows,
         trades: (await c.query("SELECT *,date::text FROM trades")).rows,
+        initial_holdings: (await c.query("SELECT * FROM initial_holdings"))
+          .rows,
         dividends: (await c.query("SELECT *,date::text FROM dividends")).rows,
         watchlist: (await c.query("SELECT * FROM watchlist")).rows,
         goals: (
@@ -132,7 +134,7 @@ export function createApp(db, config) {
       throw fail("Contraseña incorrecta.", 403);
     await db.tx((c) =>
       c.query(
-        "TRUNCATE goal_contributions,goals,dividends,trades,transactions,transfers,recurring_rules,budgets,accounts,watchlist,quote_cache,snapshots,news_cache RESTART IDENTITY CASCADE",
+        "TRUNCATE goal_contributions,goals,initial_holdings,dividends,trades,transactions,transfers,recurring_rules,budgets,accounts,watchlist,quote_cache,snapshots,news_cache RESTART IDENTITY CASCADE",
       ),
     );
     res.json({ ok: true });

@@ -120,6 +120,85 @@ export default function Investments({ data, mutate, setModal, notify, user }) {
         </Form>
       ),
     });
+  const editPosition = (p) => {
+    const initial = inv.initial_holdings?.find((h) => h.symbol === p.symbol);
+    setModal({
+      title: "Editar posición de " + p.symbol,
+      content: initial ? (
+        <Form
+          onSubmit={async (v) => {
+            await mutate(
+              "/initial-holdings/" + p.symbol,
+              { quantity: v.quantity, total_cost: v.total_cost || null },
+              "PUT",
+            );
+            setModal(null);
+          }}
+        >
+          <Field
+            label="Unidades de la tenencia inicial"
+            name="quantity"
+            type="number"
+            min="0.00000001"
+            step="0.00000001"
+            defaultValue={initial.quantity}
+            required
+          />
+          <MoneyField
+            label="Costo total original (opcional, USD)"
+            name="total_cost"
+            defaultValue={initial.total_cost || ""}
+            required={false}
+          />
+          <p className="hint">
+            Deja el costo vacío si todavía no lo conoces. Esta tenencia no
+            descuenta dinero de tus cuentas. Las compras y ventas posteriores se
+            corrigen en el historial de operaciones.
+          </p>
+        </Form>
+      ) : (
+        <>
+          <p>
+            Esta posición se calcula con tus operaciones. Elige cuál quieres
+            corregir:
+          </p>
+          {inv.trades
+            .filter((t) => t.symbol === p.symbol)
+            .map((t) => (
+              <div className="list-row" key={t.id}>
+                <span>
+                  {t.date} · {t.side === "buy" ? "Compra" : "Venta"} ·{" "}
+                  {Number(t.quantity)} unidades
+                </span>
+                <button className="text-button" onClick={() => addTrade(t)}>
+                  Editar operación
+                </button>
+              </div>
+            ))}
+        </>
+      ),
+    });
+  };
+  const removePosition = (p) =>
+    setModal({
+      title: "Eliminar posición de " + p.symbol,
+      content: (
+        <Form
+          submit="Eliminar posición y registros"
+          onSubmit={async () => {
+            await mutate("/positions/" + p.symbol, undefined, "DELETE");
+            setModal(null);
+            notify("Posición eliminada y saldos recalculados.");
+          }}
+        >
+          <p>
+            Se borrarán la tenencia inicial, las compras, ventas y dividendos de{" "}
+            {p.symbol}, y se quitará de seguimiento. Los saldos de las cuentas
+            se recalcularán. Esta acción no se puede deshacer.
+          </p>
+        </Form>
+      ),
+    });
   const addWatch = () =>
     setModal({
       title: "Seguir una acción",
@@ -155,26 +234,39 @@ export default function Investments({ data, mutate, setModal, notify, user }) {
         </div>
       )}
       {error && <p className="error">{error}</p>}
+      {inv.cost_incomplete && (
+        <div className="alert warning">
+          Tienes unidades registradas sin costo de compra. El valor de mercado
+          se calculará con la última cotización disponible; las ganancias quedan
+          pendientes hasta que completes el costo real.
+        </div>
+      )}
       <div className="stats-grid">
         <Stat
           label="Valor del portafolio"
           value={inv.value}
+          valueLabel={
+            inv.value_incomplete ? "Pendiente de cotización" : undefined
+          }
           foot="Último precio disponible o costo"
         />
         <Stat
           label="Capital invertido"
           value={inv.cost}
+          valueLabel={inv.cost_incomplete ? "Pendiente de costo" : undefined}
           foot="Costo de las posiciones abiertas"
         />
         <Stat
           label="Ganancia no realizada"
           value={inv.unrealized}
+          valueLabel={inv.cost_incomplete ? "Pendiente de costo" : undefined}
           positive={Number(inv.unrealized) >= 0}
           foot="Posiciones abiertas"
         />
         <Stat
           label="Ganancia realizada"
           value={inv.realized}
+          valueLabel={inv.cost_incomplete ? "Pendiente de costo" : undefined}
           positive={Number(inv.realized) >= 0}
           foot="Ventas + dividendos cobrados"
         />
@@ -217,6 +309,7 @@ export default function Investments({ data, mutate, setModal, notify, user }) {
                   <th>Valor</th>
                   <th>Resultado</th>
                   <th>Peso</th>
+                  <th>Editar / eliminar</th>
                 </tr>
               </thead>
               <tbody>
@@ -235,14 +328,18 @@ export default function Investments({ data, mutate, setModal, notify, user }) {
                       {Number(p.quantity).toLocaleString("es-SV", {
                         maximumFractionDigits: 8,
                       })}
-                      <small>{usd(p.average)}</small>
+                      <small>
+                        {p.cost_unknown ? "Costo pendiente" : usd(p.average)}
+                      </small>
                     </td>
                     <td>
-                      {usd(p.price)}
+                      {p.price === null ? "Pendiente" : usd(p.price)}
                       <small>
-                        {p.estimated
-                          ? "Estimado al costo"
-                          : timeLabel(p.quote.updated_at)}
+                        {p.price === null
+                          ? "Sin cotización disponible"
+                          : p.estimated
+                            ? "Estimado al costo"
+                            : timeLabel(p.quote.updated_at)}
                       </small>
                       {p.quote &&
                         Date.now() - new Date(p.quote.updated_at).getTime() >
@@ -252,14 +349,14 @@ export default function Investments({ data, mutate, setModal, notify, user }) {
                           </small>
                         )}
                     </td>
-                    <td>{usd(p.value)}</td>
+                    <td>{p.value === null ? "Pendiente" : usd(p.value)}</td>
                     <td
                       className={
                         Number(p.unrealized) >= 0 ? "positive" : "negative"
                       }
                     >
-                      {usd(p.unrealized)}
-                      <small>{p.percent} %</small>
+                      {p.cost_unknown ? "Costo pendiente" : usd(p.unrealized)}
+                      {!p.cost_unknown && <small>{p.percent} %</small>}
                     </td>
                     <td>
                       {p.weight.toFixed(1)} %
@@ -268,6 +365,20 @@ export default function Investments({ data, mutate, setModal, notify, user }) {
                           Concentración alta
                         </small>
                       )}
+                    </td>
+                    <td>
+                      <button
+                        className="text-button"
+                        onClick={() => editPosition(p)}
+                      >
+                        Editar
+                      </button>
+                      <button
+                        className="text-button negative"
+                        onClick={() => removePosition(p)}
+                      >
+                        Eliminar
+                      </button>
                     </td>
                   </tr>
                 ))}

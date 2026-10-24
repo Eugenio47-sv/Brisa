@@ -28,6 +28,7 @@ export async function runRecurring(db) {
 }
 export async function snapshot(db) {
   const d = await dashboard(db);
+  if (d.investments.value_incomplete || d.investments.cost_incomplete) return;
   await db.query(
     "INSERT INTO snapshots(date,net_worth,portfolio,cost_basis,profit) VALUES ($1,$2,$3,$4,$5) ON CONFLICT(date) DO UPDATE SET net_worth=EXCLUDED.net_worth,portfolio=EXCLUDED.portfolio,cost_basis=EXCLUDED.cost_basis,profit=EXCLUDED.profit",
     [
