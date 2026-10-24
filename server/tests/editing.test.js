@@ -154,6 +154,41 @@ test("compras fraccionarias por total y correcciones recalculan saldos sin dupli
     date: today(),
   }).expect(200);
   await send("delete", "/contributions/" + contribution.id).expect(200);
+  const bankAport = await send("post", `/goals/${goal.id}/contributions`, {
+    amount: "100",
+    account_id: bank.id,
+    date: today(),
+  }).expect(201);
+  assert.equal(
+    (await balances()).find((a) => a.id === bank.id).balance,
+    "1000.00",
+  );
+  const bankRecord = (await agent.get("/api/contributions")).body.find(
+    (c) => c.account_id === bank.id,
+  );
+  await send("put", "/contributions/" + bankRecord.id, {
+    amount: "125",
+    account_id: bank.id,
+    date: today(),
+  }).expect(200);
+  await send("post", `/goals/${goal.id}/contributions`, {
+    amount: "900",
+    account_id: bank.id,
+    date: today(),
+  }).expect(400);
+  const credit = (
+    await send("post", "/accounts", {
+      name: "Tarjeta",
+      type: "credit",
+      opening_balance: "1000",
+    }).expect(201)
+  ).body;
+  await send("post", `/goals/${goal.id}/contributions`, {
+    amount: "10",
+    account_id: credit.id,
+    date: today(),
+  }).expect(400);
+  await send("delete", "/contributions/" + bankRecord.id).expect(200);
   await send("delete", "/accounts/" + bank.id).expect(200);
 });
 

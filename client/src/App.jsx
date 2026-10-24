@@ -290,7 +290,7 @@ export default function App() {
                     home: "Tu panorama, más claro.",
                     expenses: "Cada movimiento cuenta.",
                     investments: "Invierte con perspectiva.",
-                    savings: "Dale forma a tus planes.",
+                    savings: "Tus cuentas y tus metas.",
                     more: "Un poco más de claridad.",
                   }[tab]
                 }
@@ -302,18 +302,21 @@ export default function App() {
                     expenses:
                       "Conoce a dónde va tu dinero y decide con intención.",
                     investments: "Sigue tus activos, entiende tus resultados.",
-                    savings: "Pequeños pasos hoy. Más posibilidades mañana.",
+                    savings:
+                      "Organiza tu dinero y avanza hacia lo que quieres lograr.",
                     more: "Información, herramientas y un espacio a tu medida.",
                   }[tab]
                 }
               </p>
             </div>
-            <button
-              className="primary desktop-add"
-              onClick={() => setModal({ type: "transaction" })}
-            >
-              <Plus size={18} /> Nuevo movimiento
-            </button>
+            {tab !== "savings" && (
+              <button
+                className="primary desktop-add"
+                onClick={() => setModal({ type: "transaction" })}
+              >
+                <Plus size={18} /> Nuevo movimiento
+              </button>
+            )}
           </div>
           {error && (
             <div className="error" role="alert">
@@ -352,13 +355,15 @@ export default function App() {
           </button>
         ))}
       </nav>
-      <button
-        className="fab"
-        aria-label="Registrar movimiento"
-        onClick={() => setModal({ type: "transaction" })}
-      >
-        <Plus />
-      </button>
+      {tab !== "savings" && (
+        <button
+          className="fab"
+          aria-label="Registrar movimiento"
+          onClick={() => setModal({ type: "transaction" })}
+        >
+          <Plus />
+        </button>
+      )}
       {notice && (
         <div className="toast" role="status">
           {notice}

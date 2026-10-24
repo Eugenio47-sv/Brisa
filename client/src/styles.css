@@ -1765,6 +1765,18 @@ dialog form > p {
     font-size: 23px;
   }
 }
+.savings-history {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+}
+.savings-history summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.account-card .text-button {
+  display: block;
+}
 .stock-search-results {
   display: grid;
   gap: 6px;

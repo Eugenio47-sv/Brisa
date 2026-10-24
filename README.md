@@ -221,6 +221,10 @@ Se verifican: promedio y comisiones, ventas inválidas, precisión decimal, pres
 
 Controles: Helmet/CSP, origen exacto y protección CSRF por comprobación de Origin en escrituras (también login), JWT en cookie, sesiones revocables en PostgreSQL, bcrypt, límites de solicitudes y login, validación Zod y consultas parametrizadas. Los únicos fragmentos SQL compartidos son textos constantes controlados por el código, nunca valores enviados por el usuario. El limitador de login es por proceso; este despliegue personal supone una sola instancia de Render. Todas las rutas `/api` salvo login requieren sesión. No hay un endpoint de salud público.
 
+## Cuentas y metas
+
+Ahorros tiene dos apartados: Cuentas y Metas. En Cuentas se agregan y editan saldos iniciales, y se transfieren fondos entre cuentas; su historial permanece plegado. En Metas se crean objetivos y se registra ahorro desde cualquier cuenta con saldo disponible, excepto tarjetas de crédito. Un aporte reserva dinero existente: no descuenta otra vez del saldo ni crea ingresos ficticios. Los aportes y retiros se consultan y corrigen dentro de cada meta. Las acciones de eliminar una cuenta o meta están dentro de su edición y requieren confirmación.
+
 ## Dividendos
 
 En Inversiones → Dividendos registra el importe neto recibido, el símbolo, la cuenta de destino y la fecha de cobro. Los pagos con fecha futura quedan programados: al llegar ese día (zona America/El_Salvador) se incluyen automáticamente en los saldos, los ingresos de ese mes y el rendimiento realizado. El cálculo se hace desde los registros, por lo que recargar la página o reiniciar el servidor no duplica el abono. No se suman al valor de las posiciones ni cambian el costo promedio.

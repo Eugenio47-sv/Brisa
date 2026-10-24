@@ -81,8 +81,10 @@ export function savingsRouter(db) {
       if (!old) throw fail("Aporte no encontrado.", 404);
       if (v) {
         const account = (await accounts(c)).find((a) => a.id === v.account_id);
-        if (!account || !["savings", "emergency"].includes(account.type))
-          throw fail("Elige una cuenta de ahorro o fondo de emergencia.");
+        if (!account || account.type === "credit")
+          throw fail(
+            "Elige una cuenta con dinero disponible; no una tarjeta de crédito.",
+          );
         await c.query(
           "UPDATE goal_contributions SET amount=$1,account_id=$2,date=$3 WHERE id=$4",
           [v.amount, v.account_id, v.date, id],
@@ -154,8 +156,10 @@ export function savingsRouter(db) {
     await db.tx(async (c) => {
       await c.query("SELECT pg_advisory_xact_lock(71624)");
       const a = (await accounts(c)).find((a) => a.id === v.account_id);
-      if (!a || !["savings", "emergency"].includes(a.type))
-        throw fail("Elige una cuenta de ahorro o fondo de emergencia.");
+      if (!a || a.type === "credit")
+        throw fail(
+          "Elige una cuenta con dinero disponible; no una tarjeta de crédito.",
+        );
       const allocated = (
         await c.query(
           "SELECT COALESCE(sum(amount),0)::text AS total FROM goal_contributions WHERE account_id=$1",

@@ -1,85 +1,160 @@
-import React, { useState, useEffect } from "react";
-import { Plus, ArrowLeftRight, Target, ShieldCheck } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Plus, ArrowLeftRight, Target } from "lucide-react";
 import {
   Card,
   Form,
   Field,
+  Select,
   MoneyField,
   AccountSelect,
   Empty,
   Progress,
 } from "../components";
 import { api, usd, dateNow, types } from "../lib";
-export default function Savings({ data, mutate, setModal }) {
-  const [transfers, setTransfers] = useState([]),
-    [contributions, setContributions] = useState([]),
-    [error, setError] = useState("");
+import { AccountForm } from "../App";
+
+export default function Savings({ data, mutate, setModal, notify }) {
+  const [section, setSection] = useState("accounts");
+  const [transfers, setTransfers] = useState([]);
+  const [contributions, setContributions] = useState([]);
+  const [error, setError] = useState("");
   useEffect(() => {
-    api("/contributions")
-      .then(setContributions)
-      .catch((e) => setError(e.message));
-    api("/transfers")
-      .then(setTransfers)
-      .catch((e) => setError(e.message));
+    let live = true;
+    Promise.all([api("/transfers"), api("/contributions")])
+      .then(([t, c]) => {
+        if (live) {
+          setTransfers(t);
+          setContributions(c);
+          setError("");
+        }
+      })
+      .catch((e) => {
+        if (live) setError(e.message);
+      });
+    return () => {
+      live = false;
+    };
   }, [data]);
-  const addGoal = (item) =>
+  const fundingAccounts = data.accounts.filter((a) => a.type !== "credit");
+  const finish = (message) => {
+    setModal(null);
+    notify(message);
+  };
+  const confirmDelete = (title, description, path) =>
     setModal({
-      title: item ? "Editar meta" : "Una nueva meta",
+      title,
       content: (
         <Form
-          onSubmit={async (v) => {
-            await mutate(
-              "/goals" + (item ? "/" + item.id : ""),
-              v,
-              item ? "PUT" : "POST",
-            );
-            setModal(null);
+          submit="Eliminar"
+          onSubmit={async () => {
+            await mutate(path, undefined, "DELETE");
+            finish("Registro eliminado.");
           }}
         >
-          <Field
-            label="¿Qué quieres lograr?"
-            name="name"
-            maxLength={80}
-            defaultValue={item?.name}
-            required
-          />
-          <MoneyField
-            label="Monto objetivo (USD)"
-            name="target"
-            defaultValue={item?.target}
-          />
-          <Field
-            label="Fecha límite"
-            name="deadline"
-            type="date"
-            defaultValue={item?.deadline}
-            required
-          />
+          <p>{description}</p>
         </Form>
       ),
     });
-  const transfer = (item = null) =>
+  const accountForm = (item = null) =>
     setModal({
-      title: item ? "Editar transferencia" : "Mover dinero entre cuentas",
+      title: item ? "Editar cuenta" : "Agregar cuenta",
+      content: (
+        <>
+          <AccountForm
+            item={item}
+            onSave={async (v) => {
+              await mutate(
+                "/accounts" + (item ? "/" + item.id : ""),
+                v,
+                item ? "PUT" : "POST",
+              );
+              finish("Cuenta guardada.");
+            }}
+          />
+          {item && (
+            <button
+              className="text-button negative section-gap"
+              onClick={() =>
+                confirmDelete(
+                  "Eliminar cuenta",
+                  `Se eliminará «${item.name}» si no tiene registros asociados. Su saldo inicial dejará de formar parte de tu patrimonio.`,
+                  "/accounts/" + item.id,
+                )
+              }
+            >
+              Eliminar esta cuenta
+            </button>
+          )}
+        </>
+      ),
+    });
+  const goalForm = (item = null) =>
+    setModal({
+      title: item ? "Editar meta" : "Crear meta",
+      content: (
+        <>
+          <Form
+            onSubmit={async (v) => {
+              await mutate(
+                "/goals" + (item ? "/" + item.id : ""),
+                v,
+                item ? "PUT" : "POST",
+              );
+              finish("Meta guardada.");
+            }}
+          >
+            <Field
+              label="¿Qué quieres lograr?"
+              name="name"
+              maxLength={80}
+              defaultValue={item?.name}
+              placeholder="Mi próximo viaje"
+              required
+            />
+            <MoneyField
+              label="¿Cuánto necesitas? (USD)"
+              name="target"
+              defaultValue={item?.target}
+            />
+            <Field
+              label="¿Para cuándo?"
+              name="deadline"
+              type="date"
+              defaultValue={item?.deadline}
+              required
+            />
+          </Form>
+          {item && (
+            <button
+              className="text-button negative section-gap"
+              onClick={() =>
+                confirmDelete(
+                  "Eliminar meta",
+                  "Se eliminarán la meta y sus aportes. El dinero permanece en tus cuentas.",
+                  "/goals/" + item.id,
+                )
+              }
+            >
+              Eliminar esta meta
+            </button>
+          )}
+        </>
+      ),
+    });
+  const transferForm = (item = null) =>
+    setModal({
+      title: item ? "Editar transferencia" : "Transferir entre cuentas",
       content: (
         <Form
           onSubmit={async (v) => {
             await mutate(
               "/transfers" + (item ? "/" + item.id : ""),
-              {
-                ...v,
-                from_id: Number(v.from_id),
-                to_id: Number(v.to_id),
-              },
+              { ...v, from_id: Number(v.from_id), to_id: Number(v.to_id) },
               item ? "PUT" : "POST",
             );
-            setModal(null);
+            finish("Transferencia guardada.");
           }}
         >
-          <p className="hint">
-            Una transferencia cambia dónde está tu dinero, sin contar como
-            ingreso o gasto.
-          </p>
           <AccountSelect
             accounts={data.accounts}
             label="Desde"
@@ -101,349 +176,296 @@ export default function Savings({ data, mutate, setModal }) {
             max={dateNow()}
             required
           />
+          <p className="hint">
+            Solo cambia dónde está tu dinero. No se cuenta como ingreso ni
+            gasto.
+          </p>
         </Form>
       ),
     });
-  const allocate = (g) =>
+  const contributionForm = (goal, item = null) =>
     setModal({
-      title: "Asignar dinero a " + g.name,
-      content: (
+      title: item ? "Editar aporte o retiro" : "Ahorrar para " + goal.name,
+      content: fundingAccounts.length ? (
         <Form
           onSubmit={async (v) => {
-            await mutate("/goals/" + g.id + "/contributions", {
-              ...v,
-              account_id: Number(v.account_id),
-            });
-            setModal(null);
+            const amount =
+              v.direction === "withdraw" ? "-" + v.amount : v.amount;
+            await mutate(
+              item
+                ? "/contributions/" + item.id
+                : "/goals/" + goal.id + "/contributions",
+              { amount, account_id: Number(v.account_id), date: v.date },
+              item ? "PUT" : "POST",
+            );
+            finish("Ahorro actualizado.");
           }}
         >
-          <p>
-            Asigna una parte del saldo existente de una cuenta de ahorro. Para
-            agregar dinero nuevo, transfiérelo primero. Un monto negativo libera
-            una asignación.
-          </p>
-          <AccountSelect accounts={data.accounts} savings name="account_id" />
+          <Select
+            label="¿Qué quieres hacer?"
+            name="direction"
+            defaultValue={item && Number(item.amount) < 0 ? "withdraw" : "add"}
+          >
+            <option value="add">Agregar ahorro a esta meta</option>
+            <option value="withdraw">Retirar ahorro de esta meta</option>
+          </Select>
+          <AccountSelect
+            accounts={fundingAccounts}
+            label="Cuenta donde está ese dinero"
+            name="account_id"
+            defaultValue={item?.account_id}
+          />
           <MoneyField
-            label="Monto a asignar o liberar (USD)"
+            label="Monto (USD)"
             name="amount"
-            min="-999999999999.99"
+            defaultValue={
+              item ? Math.abs(Number(item.amount)).toFixed(2) : undefined
+            }
           />
           <Field
             label="Fecha"
             name="date"
             type="date"
             max={dateNow()}
-            defaultValue={dateNow()}
+            defaultValue={item?.date || dateNow()}
             required
           />
+          <p className="hint">
+            Reservas dinero que ya tienes en esa cuenta. Su saldo no cambia y el
+            mismo dinero no puede asignarse a dos metas. Retirar lo deja
+            disponible otra vez.
+          </p>
         </Form>
+      ) : (
+        <Empty title="Primero agrega una cuenta">
+          Elige dónde guardarás el dinero de tus metas.
+          <button className="primary" onClick={() => accountForm()}>
+            Agregar cuenta
+          </button>
+        </Empty>
       ),
     });
+  const goalHistory = (goal) => {
+    const rows = contributions.filter((c) => c.goal_id === goal.id);
+    setModal({
+      title: "Aportes de " + goal.name,
+      content: (
+        <>
+          <p>
+            <strong>{usd(goal.saved)}</strong> ahorrados de {usd(goal.target)}.
+          </p>
+          <button className="primary" onClick={() => contributionForm(goal)}>
+            Agregar ahorro
+          </button>
+          {rows.length ? (
+            rows.map((c) => (
+              <div className="list-row" key={c.id}>
+                <div>
+                  <strong>
+                    {Number(c.amount) < 0 ? "Retiro" : "Aporte"} ·{" "}
+                    {usd(Math.abs(Number(c.amount)))}
+                  </strong>
+                  <small>
+                    {c.account} · {c.date}
+                  </small>
+                </div>
+                <button
+                  className="text-button"
+                  onClick={() => contributionForm(goal, c)}
+                >
+                  Editar
+                </button>
+                <button
+                  className="text-button negative"
+                  onClick={() =>
+                    confirmDelete(
+                      "Eliminar aporte o retiro",
+                      "Se corregirá lo reservado a esta meta. El dinero de tu cuenta no cambia.",
+                      "/contributions/" + c.id,
+                    )
+                  }
+                >
+                  Eliminar
+                </button>
+              </div>
+            ))
+          ) : (
+            <Empty title="Todavía no hay aportes">
+              Agrega tu primer ahorro cuando quieras.
+            </Empty>
+          )}
+        </>
+      ),
+    });
+  };
   return (
     <>
-      {error && <p className="error">{error}</p>}
-      <div className="section-title">
-        <h2>Tus cuentas</h2>
-        <div className="inline-actions">
-          <button className="text-button" onClick={() => transfer()}>
-            <ArrowLeftRight size={17} /> Transferir
-          </button>
-          <button
-            className="primary"
-            onClick={() => setModal({ type: "account" })}
-          >
-            <Plus size={17} /> Nueva cuenta
-          </button>
-        </div>
-      </div>
-      {data.accounts.length ? (
-        <div className="account-grid">
-          {data.accounts.map((a) => (
-            <Card key={a.id} className="account-card">
-              <span className="eyebrow">{types[a.type]}</span>
-              <h3>{a.name}</h3>
-              <strong className={Number(a.balance) < 0 ? "negative" : ""}>
-                {usd(a.balance)}
-              </strong>
-              <small>
-                {a.type === "credit"
-                  ? "Saldo negativo = deuda pendiente"
-                  : "Saldo disponible"}
-              </small>
-            </Card>
-          ))}
-        </div>
-      ) : (
-        <Card>
-          <Empty title="Un lugar para cada parte de tu dinero">
-            Agrega tus cuentas y sus saldos iniciales para empezar.
-          </Empty>
-        </Card>
-      )}
-      <div className="section-title">
-        <h2>Tus próximas metas</h2>
-        <button className="text-button" onClick={() => addGoal()}>
-          <Plus size={17} /> Crear meta
+      <div className="tabs" aria-label="Organizar ahorros">
+        <button
+          aria-pressed={section === "accounts"}
+          className={section === "accounts" ? "active" : ""}
+          onClick={() => setSection("accounts")}
+        >
+          Cuentas
+        </button>
+        <button
+          aria-pressed={section === "goals"}
+          className={section === "goals" ? "active" : ""}
+          onClick={() => setSection("goals")}
+        >
+          Metas
         </button>
       </div>
-      <div className="goals-grid">
-        {data.goals.map((g) => (
-          <Card key={g.id} className="goal-card">
-            <div className="goal-icon">
-              <Target />
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+      {section === "accounts" ? (
+        <>
+          <div className="section-title">
+            <div>
+              <h2>Mis cuentas</h2>
+              <p className="hint">
+                Dónde está tu dinero y cuánto tienes disponible.
+              </p>
             </div>
-            <div className="card-heading">
-              <h2>{g.name}</h2>
-              <span className={"pill " + (g.behind ? "warning-text" : "")}>
-                {g.behind ? "Revisa tu ritmo" : "En camino"}
-              </span>
-            </div>
-            <div className="goal-amount">
-              <strong>{usd(g.saved)}</strong>
-              <span> de {usd(g.target)}</span>
-            </div>
-            <Progress value={g.percent} />
-            <div className="goal-meta">
-              <span>{g.percent.toFixed(0)} % completado</span>
-              <span>{g.deadline}</span>
-            </div>
-            <p className="hint">
-              Para llegar a tiempo: <strong>{usd(g.weekly)}/semana</strong> o{" "}
-              <strong>{usd(g.monthly)}/mes</strong>.
-            </p>
             <div className="inline-actions">
-              <button onClick={() => allocate(g)}>Asignar ahorro</button>
-              <button className="text-button" onClick={() => addGoal(g)}>
-                Editar
-              </button>
-              <button
-                className="text-button negative"
-                onClick={() =>
-                  setModal({
-                    title: "Eliminar meta",
-                    content: (
-                      <Form
-                        submit="Eliminar meta"
-                        onSubmit={async () => {
-                          await mutate("/goals/" + g.id, undefined, "DELETE");
-                          setModal(null);
-                        }}
-                      >
-                        <p>
-                          Se elimina la meta y sus asignaciones. El dinero
-                          permanece en tus cuentas.
-                        </p>
-                      </Form>
-                    ),
-                  })
-                }
-              >
-                Eliminar
+              {data.accounts.length > 1 && (
+                <button className="text-button" onClick={() => transferForm()}>
+                  <ArrowLeftRight size={16} /> Transferir
+                </button>
+              )}
+              <button className="primary" onClick={() => accountForm()}>
+                <Plus size={16} /> Agregar cuenta
               </button>
             </div>
-          </Card>
-        ))}
-        {!data.goals.length && (
-          <Card>
-            <Empty title="Un viaje, un hogar, tranquilidad">
-              <button className="text-button" onClick={() => addGoal()}>
-                Ponle nombre a tu primera meta →
-              </button>
-            </Empty>
-          </Card>
-        )}
-      </div>
-      <div className="two-col section-gap">
-        <Card title="Tu red de tranquilidad" action={<ShieldCheck size={22} />}>
-          <p>Fondo de emergencia</p>
-          <div className="big-number">{usd(data.emergency.balance)}</div>
-          <p className="hint">
-            {data.emergency.months
-              ? `${data.emergency.months} meses cubiertos`
-              : "Registra gastos para calcular tu cobertura"}
-            . Basado en los 3 meses completos anteriores, incluidos los meses
-            sin gastos.
-          </p>
-          <Progress
-            value={
-              Number(data.emergency.target3) > 0
-                ? (Number(data.emergency.balance) /
-                    Number(data.emergency.target3)) *
-                  100
-                : 0
-            }
-          />
-          <div className="list-row">
-            <span>Meta de 3 meses</span>
-            <strong>{usd(data.emergency.target3)}</strong>
           </div>
-          <div className="list-row">
-            <span>Meta de 6 meses</span>
-            <strong>{usd(data.emergency.target6)}</strong>
+          {data.accounts.length ? (
+            <div className="account-grid">
+              {data.accounts.map((a) => (
+                <Card key={a.id} className="account-card">
+                  <span className="eyebrow">{types[a.type]}</span>
+                  <h3>{a.name}</h3>
+                  <strong className={Number(a.balance) < 0 ? "negative" : ""}>
+                    {usd(a.balance)}
+                  </strong>
+                  <small>
+                    {a.type === "credit"
+                      ? "Saldo negativo = deuda"
+                      : "Saldo actual"}
+                  </small>
+                  <button
+                    className="text-button section-gap"
+                    onClick={() => accountForm(a)}
+                  >
+                    Editar cuenta
+                  </button>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <Card>
+              <Empty title="Agrega tu primera cuenta">
+                Puede ser tu banco, tu ahorro o el dinero que llevas en
+                efectivo.
+              </Empty>
+            </Card>
+          )}
+          {transfers.length > 0 && (
+            <details className="savings-history section-gap">
+              <summary>Ver transferencias ({transfers.length})</summary>
+              {transfers.map((t) => (
+                <div className="list-row" key={t.id}>
+                  <div>
+                    <strong>
+                      {t.from_name} → {t.to_name}
+                    </strong>
+                    <small>{String(t.date).slice(0, 10)}</small>
+                  </div>
+                  <strong>{usd(t.amount)}</strong>
+                  <button
+                    className="text-button"
+                    onClick={() => transferForm(t)}
+                  >
+                    Editar
+                  </button>
+                  <button
+                    className="text-button negative"
+                    onClick={() =>
+                      confirmDelete(
+                        "Eliminar transferencia",
+                        "Se recalcularán los saldos de ambas cuentas.",
+                        "/transfers/" + t.id,
+                      )
+                    }
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              ))}
+            </details>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="section-title">
+            <div>
+              <h2>Mis metas</h2>
+              <p className="hint">
+                Elige un objetivo y guarda dinero a tu ritmo.
+              </p>
+            </div>
+            <button className="primary" onClick={() => goalForm()}>
+              <Plus size={16} /> Crear meta
+            </button>
           </div>
-        </Card>
-        <Card title="Una guía: 50 / 30 / 20">
-          <p className="hint">
-            Una referencia flexible para tus ingresos del mes. El remanente no
-            equivale a ahorro depositado.
-          </p>
-          {[
-            ["Necesidades", "needs", 50],
-            ["Deseos", "wants", 30],
-            ["Remanente disponible", "remaining", 20],
-          ].map(([name, key, pct]) => (
-            <div className="budget-row" key={key}>
-              <div>
-                <strong>{name}</strong>
-                <span>{usd(data.rule[key])}</span>
-              </div>
-              <Progress
-                value={
-                  Number(data.income) > 0
-                    ? (Number(data.rule[key]) / Number(data.income)) * 100
-                    : 0
-                }
-              />
-              <small>
-                Referencia {pct} %: {usd((Number(data.income) * pct) / 100)}
-              </small>
-            </div>
-          ))}
-        </Card>
-      </div>
-      <Card title="Aportes y retiros de metas" className="section-gap">
-        {contributions.length ? (
-          contributions.map((c) => (
-            <div className="list-row" key={c.id}>
-              <div>
-                <strong>{c.goal}</strong>
-                <small>
-                  {c.account} · {c.date}
-                </small>
-              </div>
-              <strong>{usd(c.amount)}</strong>
-              <button
-                className="text-button"
-                onClick={() =>
-                  setModal({
-                    title: "Editar aporte o retiro",
-                    content: (
-                      <Form
-                        onSubmit={async (v) => {
-                          await mutate(
-                            "/contributions/" + c.id,
-                            { ...v, account_id: Number(v.account_id) },
-                            "PUT",
-                          );
-                          setModal(null);
-                        }}
-                      >
-                        <MoneyField
-                          label="Monto (negativo para retirar)"
-                          name="amount"
-                          min="-999999999999.99"
-                          defaultValue={c.amount}
-                        />
-                        <AccountSelect
-                          accounts={data.accounts}
-                          savings
-                          name="account_id"
-                          defaultValue={c.account_id}
-                        />
-                        <Field
-                          label="Fecha"
-                          name="date"
-                          type="date"
-                          defaultValue={c.date}
-                          max={dateNow()}
-                          required
-                        />
-                      </Form>
-                    ),
-                  })
-                }
-              >
-                Editar
-              </button>
-              <button
-                className="text-button negative"
-                onClick={() =>
-                  setModal({
-                    title: "Eliminar aporte o retiro",
-                    content: (
-                      <Form
-                        submit="Eliminar"
-                        onSubmit={async () => {
-                          await mutate(
-                            "/contributions/" + c.id,
-                            undefined,
-                            "DELETE",
-                          );
-                          setModal(null);
-                        }}
-                      >
-                        <p>
-                          Se corregirá lo asignado a la meta. Esto no cambia el
-                          dinero de tu cuenta.
-                        </p>
-                      </Form>
-                    ),
-                  })
-                }
-              >
-                Eliminar
-              </button>
-            </div>
-          ))
-        ) : (
-          <Empty title="Aún no hay aportes ni retiros" />
-        )}
-      </Card>
-      <Card title="Transferencias recientes">
-        {transfers.length ? (
-          transfers.map((t) => (
-            <div className="list-row" key={t.id}>
-              <div>
-                <strong>
-                  {t.from_name} → {t.to_name}
-                </strong>
-                <small>{String(t.date).slice(0, 10)}</small>
-              </div>
-              <strong>{usd(t.amount)}</strong>
-              <button className="text-button" onClick={() => transfer(t)}>
-                Editar
-              </button>
-              <button
-                className="text-button negative"
-                onClick={() =>
-                  setModal({
-                    title: "Eliminar transferencia",
-                    content: (
-                      <Form
-                        submit="Eliminar"
-                        onSubmit={async () => {
-                          await mutate(
-                            "/transfers/" + t.id,
-                            undefined,
-                            "DELETE",
-                          );
-                          setModal(null);
-                        }}
-                      >
-                        <p>Los saldos de ambas cuentas se recalcularán.</p>
-                      </Form>
-                    ),
-                  })
-                }
-              >
-                Borrar
-              </button>
-            </div>
-          ))
-        ) : (
-          <Empty title="Aún no hay transferencias" />
-        )}
-      </Card>
+          <div className="goals-grid">
+            {data.goals.map((g) => (
+              <Card key={g.id} className="goal-card">
+                <div className="card-heading">
+                  <h2>{g.name}</h2>
+                  <Target size={20} />
+                </div>
+                <div className="goal-amount">
+                  <strong>{usd(g.saved)}</strong>
+                  <span> de {usd(g.target)}</span>
+                </div>
+                <Progress value={g.percent} />
+                <div className="goal-meta">
+                  <span>{Math.round(g.percent)} % completado</span>
+                  <span>Hasta {g.deadline}</span>
+                </div>
+                <div className="inline-actions section-gap">
+                  <button
+                    className="primary"
+                    onClick={() => contributionForm(g)}
+                  >
+                    Agregar ahorro
+                  </button>
+                  <button
+                    className="text-button"
+                    onClick={() => goalHistory(g)}
+                  >
+                    Ver aportes
+                  </button>
+                  <button className="text-button" onClick={() => goalForm(g)}>
+                    Editar meta
+                  </button>
+                </div>
+              </Card>
+            ))}
+          </div>
+          {!data.goals.length && (
+            <Card>
+              <Empty title="¿Qué quieres lograr?">
+                Un viaje, una compra o un fondo para el futuro. Crea tu primera
+                meta para empezar.
+              </Empty>
+            </Card>
+          )}
+        </>
+      )}
     </>
   );
 }
