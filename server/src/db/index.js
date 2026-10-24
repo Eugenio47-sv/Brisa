@@ -54,6 +54,19 @@ export async function migrate(db, hash) {
       "INSERT INTO settings(id,password_hash) VALUES (1,$1) ON CONFLICT(id) DO NOTHING",
       [hash],
     );
+    if (
+      !(
+        await c.query(
+          "SELECT version FROM schema_migrations WHERE version=$1",
+          [3],
+        )
+      ).rows.length
+    ) {
+      await c.query(
+        "ALTER TABLE trades ALTER COLUMN price TYPE numeric(44,24)",
+      );
+      await c.query("INSERT INTO schema_migrations(version) VALUES ($1)", [3]);
+    }
     const names = [
       "Comida",
       "Transporte",

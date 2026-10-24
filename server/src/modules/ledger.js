@@ -85,7 +85,24 @@ export function ledgerRouter(db) {
     if (!q.rows.length) throw fail("Cuenta no encontrada.", 404);
     res.json(q.rows[0]);
   });
-  r.post("/transfers", async (req, res) => {
+  r.delete("/accounts/:id", async (req, res) => {
+    const id = idSchema.parse(req.params.id);
+    try {
+      const q = await db.query(
+        "DELETE FROM accounts WHERE id=$1 RETURNING id",
+        [id],
+      );
+      if (!q.rows.length) throw fail("Cuenta no encontrada.", 404);
+    } catch (e) {
+      if (e.code === "23503")
+        throw fail(
+          "Esta cuenta tiene movimientos, inversiones o ahorros asociados. Edita o elimina esos registros primero; no se borrará tu historial automáticamente.",
+        );
+      throw e;
+    }
+    res.json({ ok: true });
+  });
+  async function saveTransfer(req, res) {
     const v = z
       .object({
         from_id: idSchema,
@@ -96,6 +113,14 @@ export function ledgerRouter(db) {
       .strict()
       .refine((v) => v.from_id !== v.to_id, "Elige dos cuentas diferentes")
       .parse(req.body);
+    if (req.params.id) {
+      const q = await db.query(
+        "UPDATE transfers SET from_id=$1,to_id=$2,amount=$3,date=$4 WHERE id=$5 RETURNING *",
+        [v.from_id, v.to_id, v.amount, v.date, idSchema.parse(req.params.id)],
+      );
+      if (!q.rows.length) throw fail("Transferencia no encontrada.", 404);
+      return res.json(q.rows[0]);
+    }
     res
       .status(201)
       .json(
@@ -106,7 +131,9 @@ export function ledgerRouter(db) {
           )
         ).rows[0],
       );
-  });
+  }
+  r.post("/transfers", saveTransfer);
+  r.put("/transfers/:id", saveTransfer);
   r.get("/transfers", async (req, res) =>
     res.json(
       (
@@ -280,7 +307,7 @@ export function ledgerRouter(db) {
       ).rows,
     ),
   );
-  r.post("/recurring", async (req, res) => {
+  async function saveRecurring(req, res) {
     const v = transactionSchema
       .omit({ date: true, method: true, subcategory: true })
       .extend({
@@ -288,6 +315,24 @@ export function ledgerRouter(db) {
         period: z.enum(["weekly", "monthly", "yearly"]),
       })
       .parse(req.body);
+    if (req.params.id) {
+      const q = await db.query(
+        "UPDATE recurring_rules SET type=$1,amount=$2,category_id=$3,account_id=$4,note=$5,period=$6,next_date=$7,anchor_day=$8 WHERE id=$9 RETURNING *",
+        [
+          v.type,
+          v.amount,
+          v.category_id,
+          v.account_id,
+          v.note,
+          v.period,
+          v.next_date,
+          Number(v.next_date.slice(8)),
+          idSchema.parse(req.params.id),
+        ],
+      );
+      if (!q.rows.length) throw fail("Recurrencia no encontrada.", 404);
+      return res.json(q.rows[0]);
+    }
     res
       .status(201)
       .json(
@@ -307,6 +352,16 @@ export function ledgerRouter(db) {
           )
         ).rows[0],
       );
+  }
+  r.post("/recurring", saveRecurring);
+  r.put("/recurring/:id", saveRecurring);
+  r.delete("/recurring/:id", async (req, res) => {
+    const q = await db.query(
+      "DELETE FROM recurring_rules WHERE id=$1 RETURNING id",
+      [idSchema.parse(req.params.id)],
+    );
+    if (!q.rows.length) throw fail("Recurrencia no encontrada.", 404);
+    res.json({ ok: true });
   });
   r.patch("/recurring/:id", async (req, res) => {
     const v = z.object({ active: z.boolean() }).strict().parse(req.body);

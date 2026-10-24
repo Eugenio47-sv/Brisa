@@ -12,8 +12,12 @@ import {
 import { api, usd, dateNow, types } from "../lib";
 export default function Savings({ data, mutate, setModal }) {
   const [transfers, setTransfers] = useState([]),
+    [contributions, setContributions] = useState([]),
     [error, setError] = useState("");
   useEffect(() => {
+    api("/contributions")
+      .then(setContributions)
+      .catch((e) => setError(e.message));
     api("/transfers")
       .then(setTransfers)
       .catch((e) => setError(e.message));
@@ -54,17 +58,21 @@ export default function Savings({ data, mutate, setModal }) {
         </Form>
       ),
     });
-  const transfer = () =>
+  const transfer = (item = null) =>
     setModal({
-      title: "Mover dinero entre cuentas",
+      title: item ? "Editar transferencia" : "Mover dinero entre cuentas",
       content: (
         <Form
           onSubmit={async (v) => {
-            await mutate("/transfers", {
-              ...v,
-              from_id: Number(v.from_id),
-              to_id: Number(v.to_id),
-            });
+            await mutate(
+              "/transfers" + (item ? "/" + item.id : ""),
+              {
+                ...v,
+                from_id: Number(v.from_id),
+                to_id: Number(v.to_id),
+              },
+              item ? "PUT" : "POST",
+            );
             setModal(null);
           }}
         >
@@ -76,14 +84,20 @@ export default function Savings({ data, mutate, setModal }) {
             accounts={data.accounts}
             label="Desde"
             name="from_id"
+            defaultValue={item?.from_id}
           />
-          <AccountSelect accounts={data.accounts} label="Hacia" name="to_id" />
-          <MoneyField name="amount" />
+          <AccountSelect
+            accounts={data.accounts}
+            label="Hacia"
+            name="to_id"
+            defaultValue={item?.to_id}
+          />
+          <MoneyField name="amount" defaultValue={item?.amount} />
           <Field
             label="Fecha"
             name="date"
             type="date"
-            defaultValue={dateNow()}
+            defaultValue={item ? String(item.date).slice(0, 10) : dateNow()}
             max={dateNow()}
             required
           />
@@ -131,7 +145,7 @@ export default function Savings({ data, mutate, setModal }) {
       <div className="section-title">
         <h2>Tus cuentas</h2>
         <div className="inline-actions">
-          <button className="text-button" onClick={transfer}>
+          <button className="text-button" onClick={() => transfer()}>
             <ArrowLeftRight size={17} /> Transferir
           </button>
           <button
@@ -297,6 +311,94 @@ export default function Savings({ data, mutate, setModal }) {
           ))}
         </Card>
       </div>
+      <Card title="Aportes y retiros de metas" className="section-gap">
+        {contributions.length ? (
+          contributions.map((c) => (
+            <div className="list-row" key={c.id}>
+              <div>
+                <strong>{c.goal}</strong>
+                <small>
+                  {c.account} · {c.date}
+                </small>
+              </div>
+              <strong>{usd(c.amount)}</strong>
+              <button
+                className="text-button"
+                onClick={() =>
+                  setModal({
+                    title: "Editar aporte o retiro",
+                    content: (
+                      <Form
+                        onSubmit={async (v) => {
+                          await mutate(
+                            "/contributions/" + c.id,
+                            { ...v, account_id: Number(v.account_id) },
+                            "PUT",
+                          );
+                          setModal(null);
+                        }}
+                      >
+                        <MoneyField
+                          label="Monto (negativo para retirar)"
+                          name="amount"
+                          min="-999999999999.99"
+                          defaultValue={c.amount}
+                        />
+                        <AccountSelect
+                          accounts={data.accounts}
+                          savings
+                          name="account_id"
+                          defaultValue={c.account_id}
+                        />
+                        <Field
+                          label="Fecha"
+                          name="date"
+                          type="date"
+                          defaultValue={c.date}
+                          max={dateNow()}
+                          required
+                        />
+                      </Form>
+                    ),
+                  })
+                }
+              >
+                Editar
+              </button>
+              <button
+                className="text-button negative"
+                onClick={() =>
+                  setModal({
+                    title: "Eliminar aporte o retiro",
+                    content: (
+                      <Form
+                        submit="Eliminar"
+                        onSubmit={async () => {
+                          await mutate(
+                            "/contributions/" + c.id,
+                            undefined,
+                            "DELETE",
+                          );
+                          setModal(null);
+                        }}
+                      >
+                        <p>
+                          Se corregirá lo asignado a la meta. Esto no cambia el
+                          dinero de tu cuenta.
+                        </p>
+                      </Form>
+                    ),
+                  })
+                }
+              >
+                Eliminar
+              </button>
+            </div>
+          ))
+        ) : (
+          <Empty title="Aún no hay aportes ni retiros" />
+        )}
+      </Card>
       <Card title="Transferencias recientes">
         {transfers.length ? (
           transfers.map((t) => (
@@ -308,6 +410,9 @@ export default function Savings({ data, mutate, setModal }) {
                 <small>{String(t.date).slice(0, 10)}</small>
               </div>
               <strong>{usd(t.amount)}</strong>
+              <button className="text-button" onClick={() => transfer(t)}>
+                Editar
+              </button>
               <button
                 className="text-button negative"
                 onClick={() =>

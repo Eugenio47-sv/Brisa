@@ -39,8 +39,16 @@ export async function investments(db) {
 }
 export function investmentRouter(db, market) {
   const r = Router();
+  r.get("/stocks/search", async (req, res) => {
+    const query = z.string().trim().min(2).max(80).parse(req.query.q);
+    res.json(await market.search(query));
+  });
+  r.get("/stocks/:symbol/quote", async (req, res) => {
+    res.json(await market.quote(symbolSchema.parse(req.params.symbol)));
+  });
   r.get("/investments", async (req, res) => res.json(await investments(db)));
-  r.post("/trades", async (req, res) => {
+  async function saveTrade(req, res) {
+    const id = req.params.id ? idSchema.parse(req.params.id) : null;
     const v = z
       .object({
         symbol: symbolSchema,
@@ -49,19 +57,54 @@ export function investmentRouter(db, market) {
           .string()
           .regex(/^\d{1,12}(\.\d{1,8})?$/)
           .pipe(z.string().refine((v) => D(v).gt(0))),
-        price: amountSchema,
+        price: z
+          .string()
+          .regex(/^\d{1,18}(\.\d{1,12})?$/)
+          .pipe(z.string().refine((v) => D(v).gt(0)))
+          .optional(),
+        total: amountSchema.optional(),
         fee: nonnegative,
         account_id: idSchema,
         date: pastDate,
       })
       .strict()
       .parse(req.body);
+    if (v.total) {
+      const gross =
+        v.side === "buy" ? D(v.total).minus(v.fee) : D(v.total).plus(v.fee);
+      if (!gross.gt(0))
+        throw fail("El total de compra debe superar la comisión.");
+      v.price = gross.div(v.quantity).toFixed(24);
+    }
+    if (!v.price || !D(v.price).gt(0))
+      throw fail("Indica el importe total de la operación.");
     const result = await db.tx(async (c) => {
       await c.query("SELECT pg_advisory_xact_lock(71622)");
       const rows = (
         await c.query("SELECT *,date::text FROM trades ORDER BY trades.date,id")
       ).rows;
-      portfolio([...rows, { ...v, id: 2147483647 }]);
+      if (id && !rows.some((t) => t.id === id))
+        throw fail("Operación no encontrada.", 404);
+      portfolio([
+        ...rows.filter((t) => t.id !== id),
+        { ...v, id: id || 2147483647 },
+      ]);
+      if (id)
+        return (
+          await c.query(
+            "UPDATE trades SET symbol=$1,side=$2,quantity=$3,price=$4,fee=$5,date=$6,account_id=$7 WHERE id=$8 RETURNING *",
+            [
+              v.symbol,
+              v.side,
+              v.quantity,
+              v.price,
+              v.fee,
+              v.date,
+              v.account_id,
+              id,
+            ],
+          )
+        ).rows[0];
       return (
         await c.query(
           "INSERT INTO trades(symbol,side,quantity,price,fee,date,account_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *",
@@ -69,8 +112,10 @@ export function investmentRouter(db, market) {
         )
       ).rows[0];
     });
-    res.status(201).json(result);
-  });
+    res.status(id ? 200 : 201).json(result);
+  }
+  r.post("/trades", saveTrade);
+  r.put("/trades/:id", saveTrade);
   r.delete("/trades/:id", async (req, res) => {
     const id = idSchema.parse(req.params.id);
     await db.tx(async (c) => {

@@ -540,6 +540,36 @@ function SettingsPage({
               >
                 Editar
               </button>
+              <button
+                className="text-button negative"
+                onClick={() =>
+                  setModal({
+                    title: "Eliminar cuenta",
+                    content: (
+                      <Form
+                        submit="Eliminar cuenta"
+                        onSubmit={async () => {
+                          await mutate(
+                            "/accounts/" + a.id,
+                            undefined,
+                            "DELETE",
+                          );
+                          setModal(null);
+                        }}
+                      >
+                        <p>
+                          Se eliminará la cuenta «{a.name}». Solo es posible si
+                          no tiene movimientos, inversiones ni ahorros
+                          asociados. El saldo inicial dejará de formar parte de
+                          tu patrimonio.
+                        </p>
+                      </Form>
+                    ),
+                  })
+                }
+              >
+                Eliminar
+              </button>
             </div>
           ))}
         </Card>

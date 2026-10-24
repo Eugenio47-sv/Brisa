@@ -71,9 +71,9 @@ export default function Expenses({
         </Form>
       ),
     });
-  const addBudget = () =>
+  const addBudget = (item = null) =>
     setModal({
-      title: "Definir presupuesto",
+      title: item ? "Editar presupuesto" : "Definir presupuesto",
       content: (
         <Form
           onSubmit={async (v) => {
@@ -88,10 +88,16 @@ export default function Expenses({
             label="Mes"
             type="month"
             name="month"
-            defaultValue={dateNow().slice(0, 7)}
+            readOnly={!!item}
+            defaultValue={item?.month || dateNow().slice(0, 7)}
             required
           />
-          <Select label="Alcance" name="category_id">
+          <Select
+            label="Alcance"
+            name="category_id"
+            defaultValue={item?.category_id || ""}
+            disabled={!!item}
+          >
             <option value="">Total mensual</option>
             {categories.map((c) => (
               <option key={c.id} value={c.id}>
@@ -99,33 +105,60 @@ export default function Expenses({
               </option>
             ))}
           </Select>
-          <MoneyField name="amount" />
+          {item && (
+            <input
+              type="hidden"
+              name="category_id"
+              value={item.category_id || ""}
+            />
+          )}
+          <MoneyField name="amount" defaultValue={item?.amount} />
         </Form>
       ),
     });
-  const addRecurring = () =>
+  const addRecurring = (item = null) =>
     setModal({
-      title: "Nuevo movimiento recurrente",
+      title: item
+        ? "Editar movimiento recurrente"
+        : "Nuevo movimiento recurrente",
       content: (
         <Form
           onSubmit={async (v) => {
-            await mutate("/recurring", {
-              ...v,
-              account_id: Number(v.account_id),
-              category_id: v.category_id ? Number(v.category_id) : null,
-            });
+            await mutate(
+              "/recurring" + (item ? "/" + item.id : ""),
+              {
+                ...v,
+                account_id: Number(v.account_id),
+                category_id: v.category_id ? Number(v.category_id) : null,
+              },
+              item ? "PUT" : "POST",
+            );
             setModal(null);
           }}
         >
-          <Select label="Tipo" name="type">
+          <Select label="Tipo" name="type" defaultValue={item?.type}>
             <option value="expense">Gasto</option>
             <option value="income">Ingreso</option>
           </Select>
-          <MoneyField name="amount" />
-          <Field label="Descripción" name="note" maxLength={500} required />
-          <AccountSelect accounts={data.accounts} name="account_id" />
-          <CategorySelect categories={categories} name="category_id" />
-          <Select label="Frecuencia" name="period">
+          <MoneyField name="amount" defaultValue={item?.amount} />
+          <Field
+            label="Descripción"
+            name="note"
+            maxLength={500}
+            defaultValue={item?.note}
+            required
+          />
+          <AccountSelect
+            accounts={data.accounts}
+            name="account_id"
+            defaultValue={item?.account_id}
+          />
+          <CategorySelect
+            categories={categories}
+            name="category_id"
+            defaultValue={item?.category_id || ""}
+          />
+          <Select label="Frecuencia" name="period" defaultValue={item?.period}>
             <option value="monthly">Mensual</option>
             <option value="weekly">Semanal</option>
             <option value="yearly">Anual</option>
@@ -134,7 +167,9 @@ export default function Expenses({
             label="Primera fecha"
             name="next_date"
             type="date"
-            defaultValue={dateNow()}
+            defaultValue={
+              item ? String(item.next_date).slice(0, 10) : dateNow()
+            }
             required
           />
           <p className="hint">
@@ -303,7 +338,7 @@ export default function Expenses({
         <Card
           title="Presupuestos de este mes"
           action={
-            <button className="primary" onClick={addBudget}>
+            <button className="primary" onClick={() => addBudget()}>
               <Plus size={16} /> Definir
             </button>
           }
@@ -318,6 +353,9 @@ export default function Expenses({
                   </span>
                 </div>
                 <Progress value={b.percent} level={b.level} />
+                <button className="text-button" onClick={() => addBudget(b)}>
+                  Editar presupuesto
+                </button>
                 <button
                   className="text-button negative"
                   onClick={() =>
@@ -342,7 +380,7 @@ export default function Expenses({
         <Card
           title="Pagos que se repiten"
           action={
-            <button className="primary" onClick={addRecurring}>
+            <button className="primary" onClick={() => addRecurring()}>
               <Plus size={16} /> Agregar
             </button>
           }
@@ -363,6 +401,38 @@ export default function Expenses({
                   </small>
                 </div>
                 <strong>{usd(r.amount)}</strong>
+                <button className="text-button" onClick={() => addRecurring(r)}>
+                  Editar
+                </button>
+                <button
+                  className="text-button negative"
+                  onClick={() =>
+                    setModal({
+                      title: "Eliminar recurrencia",
+                      content: (
+                        <Form
+                          submit="Eliminar"
+                          onSubmit={async () => {
+                            await mutate(
+                              "/recurring/" + r.id,
+                              undefined,
+                              "DELETE",
+                            );
+                            setModal(null);
+                          }}
+                        >
+                          <p>
+                            Se dejarán de generar nuevos movimientos. Los que ya
+                            se registraron se conservan y puedes editarlos o
+                            eliminarlos en Movimientos.
+                          </p>
+                        </Form>
+                      ),
+                    })
+                  }
+                >
+                  Eliminar
+                </button>
                 <button
                   onClick={() =>
                     mutate(

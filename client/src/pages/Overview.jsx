@@ -21,7 +21,14 @@ import {
   Pie,
   Cell,
 } from "recharts";
-import { Card, Stat, Empty, Progress, TransactionList } from "../components";
+import {
+  Card,
+  Stat,
+  Empty,
+  Progress,
+  TransactionList,
+  Form,
+} from "../components";
 import { api, usd, dateLabel } from "../lib";
 export function WealthChart({ snapshots, field = "net_worth" }) {
   if (!snapshots.length)
@@ -156,7 +163,7 @@ export function Donut({ items, total, label = "Total" }) {
     </Empty>
   );
 }
-export default function Overview({ data, setTab, setModal }) {
+export default function Overview({ data, setTab, setModal, mutate }) {
   const [recent, setRecent] = useState([]),
     [err, setErr] = useState("");
   useEffect(() => {
@@ -308,7 +315,33 @@ export default function Overview({ data, setTab, setModal }) {
           {err ? (
             <p className="error">{err}</p>
           ) : (
-            <TransactionList rows={recent} />
+            <TransactionList
+              rows={recent}
+              onEdit={(item) => setModal({ type: "transaction", item })}
+              onDelete={(item) =>
+                setModal({
+                  title: "Eliminar movimiento",
+                  content: (
+                    <Form
+                      submit="Eliminar"
+                      onSubmit={async () => {
+                        await mutate(
+                          "/transactions/" + item.id,
+                          undefined,
+                          "DELETE",
+                        );
+                        setModal(null);
+                      }}
+                    >
+                      <p>
+                        Se eliminará este movimiento de {usd(item.amount)} y se
+                        recalculará el saldo de tu cuenta.
+                      </p>
+                    </Form>
+                  ),
+                })
+              }
+            />
           )}
         </Card>
         <Card

@@ -135,5 +135,37 @@ export function createMarket(db, config, fetcher = fetch) {
       refreshing = false;
     }
   }
-  return { refresh, news };
+  async function search(query) {
+    const result = await request("search", { q: query });
+    return (result.result || [])
+      .filter((item) => /^[A-Z0-9][A-Z0-9.:-]{0,19}$/.test(item.symbol))
+      .slice(0, 12)
+      .map((item) => ({
+        symbol: item.symbol,
+        name: item.description,
+        type: item.type,
+      }));
+  }
+  async function quote(symbol) {
+    const old = (
+      await db.query("SELECT * FROM quote_cache WHERE symbol=$1", [symbol])
+    ).rows[0];
+    if (old && Date.now() - new Date(old.updated_at).getTime() < 180000)
+      return old;
+    const q = await request("quote", { symbol });
+    if (!(q.c > 0))
+      throw fail("No encontramos cotización para ese símbolo.", 404);
+    const profile = await cached("profile:" + symbol, 7 * 86400000, () =>
+      request("stock/profile2", { symbol }),
+    );
+    q.name = profile.data?.name || symbol;
+    q.sector = profile.data?.finnhubIndustry || "Sin clasificar";
+    return (
+      await db.query(
+        "INSERT INTO quote_cache(symbol,data) VALUES ($1,$2) ON CONFLICT(symbol) DO UPDATE SET data=EXCLUDED.data,updated_at=now() RETURNING *",
+        [symbol, JSON.stringify(q)],
+      )
+    ).rows[0];
+  }
+  return { refresh, news, search, quote };
 }

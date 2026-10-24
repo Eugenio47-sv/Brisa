@@ -1765,6 +1765,40 @@ dialog form > p {
     font-size: 23px;
   }
 }
+.stock-search-results {
+  display: grid;
+  gap: 6px;
+  max-height: 240px;
+  overflow: auto;
+  margin: 8px 0 16px;
+}
+.stock-search-results button {
+  display: flex;
+  flex-wrap: wrap;
+  text-align: left;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+}
+.stock-search-results button span {
+  flex: 1;
+}
+.trade-summary {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin: 16px 0;
+}
+.trade-summary p {
+  margin: 6px 0;
+}
+.list-row {
+  flex-wrap: wrap;
+}
+.transaction .text-button,
+.list-row .text-button {
+  min-height: 36px;
+}
 @media (prefers-reduced-motion: reduce) {
   * {
     animation: none !important;

@@ -13,6 +13,7 @@ import {
 } from "../components";
 import { api, usd, dateNow, timeLabel } from "../lib";
 import { WealthChart, Donut } from "./Overview";
+import TradeForm from "../TradeForm";
 export default function Investments({ data, mutate, setModal, notify, user }) {
   const [watch, setWatch] = useState([]),
     [error, setError] = useState(""),
@@ -30,60 +31,28 @@ export default function Investments({ data, mutate, setModal, notify, user }) {
     const key = p.quote?.data?.sector || "Sin clasificar";
     sectors[key] = (sectors[key] || 0) + Number(p.value);
   }
-  const addTrade = () =>
+  const addTrade = (item = null) =>
     setModal({
-      title: "Registrar operación",
+      title: item ? "Editar operación" : "Registrar compra o venta",
       content: (
-        <Form
-          onSubmit={async (v) => {
-            await mutate("/trades", { ...v, account_id: Number(v.account_id) });
+        <TradeForm
+          accounts={data.accounts}
+          item={item}
+          quotesEnabled={user.quotesEnabled}
+          onSave={async (v) => {
+            await mutate(
+              "/trades" + (item ? "/" + item.id : ""),
+              v,
+              item ? "PUT" : "POST",
+            );
             setModal(null);
-            notify("Operación registrada.");
+            notify(
+              item
+                ? "Operación actualizada. Saldos recalculados."
+                : "Operación registrada.",
+            );
           }}
-        >
-          <div className="form-grid">
-            <Field
-              label="Símbolo de la acción"
-              name="symbol"
-              placeholder="AAPL"
-              maxLength={20}
-              required
-            />
-            <Select label="Operación" name="side">
-              <option value="buy">Compra</option>
-              <option value="sell">Venta</option>
-            </Select>
-            <Field
-              label="Cantidad de acciones"
-              name="quantity"
-              type="number"
-              step="0.00000001"
-              min="0.00000001"
-              required
-            />
-            <MoneyField label="Precio por acción (USD)" name="price" />
-            <MoneyField
-              label="Comisión (USD)"
-              name="fee"
-              min="0"
-              defaultValue="0"
-            />
-            <Field
-              label="Fecha"
-              name="date"
-              type="date"
-              max={dateNow()}
-              defaultValue={dateNow()}
-              required
-            />
-          </div>
-          <AccountSelect accounts={data.accounts} name="account_id" />
-          <p className="hint">
-            La compra descuenta dinero de esta cuenta y la venta lo devuelve.
-            Registra primero tu saldo inicial. Se usa costo promedio ponderado,
-            incluyendo comisiones.
-          </p>
-        </Form>
+        />
       ),
     });
   const addWatch = () =>
@@ -166,7 +135,7 @@ export default function Investments({ data, mutate, setModal, notify, user }) {
             >
               <RefreshCw size={16} className={busy ? "spin" : ""} /> Actualizar
             </button>
-            <button className="primary" onClick={addTrade}>
+            <button className="primary" onClick={() => addTrade()}>
               <Plus size={16} /> Operación
             </button>
           </div>
@@ -333,7 +302,8 @@ export default function Investments({ data, mutate, setModal, notify, user }) {
                   <th>Cantidad</th>
                   <th>Precio</th>
                   <th>Comisión</th>
-                  <th />
+                  <th>Cuenta / total</th>
+                  <th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -346,6 +316,22 @@ export default function Investments({ data, mutate, setModal, notify, user }) {
                     <td>{usd(t.price)}</td>
                     <td>{usd(t.fee)}</td>
                     <td>
+                      {data.accounts.find((a) => a.id === t.account_id)?.name ||
+                        "Cuenta"}
+                      <small>
+                        {usd(
+                          Number(t.quantity) * Number(t.price) +
+                            (t.side === "buy" ? 1 : -1) * Number(t.fee),
+                        )}
+                      </small>
+                    </td>
+                    <td>
+                      <button
+                        className="text-button"
+                        onClick={() => addTrade(t)}
+                      >
+                        Editar
+                      </button>
                       <button
                         className="text-button negative"
                         onClick={() =>
