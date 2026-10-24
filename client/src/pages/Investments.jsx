@@ -129,7 +129,11 @@ export default function Investments({ data, mutate, setModal, notify, user }) {
           onSubmit={async (v) => {
             await mutate(
               "/initial-holdings/" + p.symbol,
-              { quantity: v.quantity, total_cost: v.total_cost || null },
+              {
+                quantity: v.quantity,
+                total_cost: v.total_cost || null,
+                basis_is_reference: !!initial.basis_is_reference,
+              },
               "PUT",
             );
             setModal(null);
@@ -145,15 +149,21 @@ export default function Investments({ data, mutate, setModal, notify, user }) {
             required
           />
           <MoneyField
-            label="Costo total original (opcional, USD)"
+            label={
+              initial.basis_is_reference
+                ? "Valor inicial de referencia (USD)"
+                : "Costo total original (opcional, USD)"
+            }
             name="total_cost"
             defaultValue={initial.total_cost || ""}
             required={false}
           />
           <p className="hint">
-            Deja el costo vacío si todavía no lo conoces. Esta tenencia no
-            descuenta dinero de tus cuentas. Las compras y ventas posteriores se
-            corrigen en el historial de operaciones.
+            {initial.basis_is_reference
+              ? "El seguimiento del rendimiento comienza desde este valor inicial. "
+              : "Deja el costo vacío si todavía no lo conoces. "}
+            Esta tenencia no descuenta dinero de tus cuentas. Las compras y
+            ventas posteriores se corrigen en el historial de operaciones.
           </p>
         </Form>
       ) : (
@@ -247,7 +257,11 @@ export default function Investments({ data, mutate, setModal, notify, user }) {
           label="Capital invertido"
           value={inv.cost}
           valueLabel={inv.cost_incomplete ? "Pendiente de costo" : undefined}
-          foot="Costo de las posiciones abiertas"
+          foot={
+            inv.uses_reference_basis
+              ? "Base inicial + compras posteriores"
+              : "Costo de las posiciones abiertas"
+          }
         />
         <Stat
           label="Ganancia no realizada"
@@ -259,9 +273,15 @@ export default function Investments({ data, mutate, setModal, notify, user }) {
         <Stat
           label="Ganancia realizada"
           value={inv.realized}
-          valueLabel={inv.cost_incomplete ? "Pendiente de costo" : undefined}
+          valueLabel={
+            inv.realized_incomplete ? "Pendiente de costo" : undefined
+          }
           positive={Number(inv.realized) >= 0}
-          foot="Ventas + dividendos cobrados"
+          foot={
+            inv.uses_reference_basis
+              ? "Ventas desde el inicio + dividendos"
+              : "Ventas + dividendos cobrados"
+          }
         />
       </div>
       <Card

@@ -99,6 +99,19 @@ export async function migrate(db, hash) {
       );
       await c.query("INSERT INTO schema_migrations(version) VALUES ($1)", [5]);
     }
+    if (
+      !(
+        await c.query(
+          "SELECT version FROM schema_migrations WHERE version=$1",
+          [6],
+        )
+      ).rows.length
+    ) {
+      await c.query(
+        "ALTER TABLE initial_holdings ADD COLUMN basis_is_reference boolean NOT NULL DEFAULT false",
+      );
+      await c.query("INSERT INTO schema_migrations(version) VALUES ($1)", [6]);
+    }
     const names = [
       "Comida",
       "Transporte",

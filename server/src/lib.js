@@ -78,6 +78,7 @@ export function portfolio(trades, quotes = {}) {
         throw fail(
           `La venta de ${t.symbol} supera las acciones disponibles en esa fecha.`,
         );
+      p.has_sales = true;
       const basis = p.cost.div(p.quantity).mul(qty);
       p.realized = p.realized.plus(value.minus(t.fee).minus(basis));
       p.cost = p.cost.minus(basis);
@@ -97,7 +98,7 @@ export function portfolio(trades, quotes = {}) {
       average: p.cost_unknown ? null : money(average),
       value: p.cost_unknown && !q ? null : money(value),
       price: p.cost_unknown && !q ? null : money(price),
-      realized: p.cost_unknown ? null : money(p.realized),
+      realized: p.cost_unknown && p.has_sales ? null : money(p.realized),
       unrealized: p.cost_unknown ? null : money(value.minus(p.cost)),
       percent: p.cost_unknown
         ? null

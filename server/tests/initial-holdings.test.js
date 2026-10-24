@@ -18,6 +18,8 @@ test("tenencia inicial fraccionaria no inventa costo ni mueve efectivo", async (
   let inv = await investments(db);
   assert.equal(inv.positions[0].quantity, "0.94826000");
   assert.equal(inv.positions[0].cost, null);
+  assert.equal(inv.realized, "0.00");
+  assert.equal(inv.realized_incomplete, false);
   assert.equal(inv.positions[0].unrealized, null);
   assert.equal(inv.positions[0].value, null);
   assert.equal(inv.value_incomplete, true);
@@ -35,6 +37,19 @@ test("tenencia inicial fraccionaria no inventa costo ni mueve efectivo", async (
   inv = await investments(db);
   assert.equal(inv.positions[0].unrealized, "168.96");
   assert.equal(inv.cost_incomplete, false);
+  assert.equal((await accounts(db))[0].balance, "500.00");
+  await db.query(
+    "UPDATE initial_holdings SET total_cost=662.44,basis_is_reference=true WHERE symbol='VOO'",
+  );
+  await db.query("UPDATE quote_cache SET data=$1 WHERE symbol='VOO'", [
+    JSON.stringify({ c: 700 }),
+  ]);
+  inv = await investments(db);
+  assert.equal(inv.uses_reference_basis, true);
+  assert.equal(inv.cost, "662.44");
+  assert.equal(inv.positions[0].quantity, "0.94826000");
+  assert.equal(inv.realized, "0.00");
+  assert.equal(inv.unrealized, "1.34");
   assert.equal((await accounts(db))[0].balance, "500.00");
   assert.throws(
     () =>

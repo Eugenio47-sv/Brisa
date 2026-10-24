@@ -62,6 +62,8 @@ export async function investments(db) {
     trades,
     initial_holdings: initialHoldings,
     cost_incomplete: positions.some((p) => p.cost_unknown),
+    realized_incomplete: positions.some((p) => p.realized === null),
+    uses_reference_basis: initialHoldings.some((h) => h.basis_is_reference),
     value_incomplete: positions.some((p) => p.value === null),
     dividends,
     dividends_total: money(paidDividends),
@@ -87,14 +89,15 @@ export function investmentRouter(db, market) {
           .regex(/^\d{1,12}(\.\d{1,8})?$/)
           .pipe(z.string().refine((v) => D(v).gt(0))),
         total_cost: amountSchema.nullable(),
+        basis_is_reference: z.boolean().default(false),
       })
       .strict()
       .parse(req.body);
     await db.tx(async (c) => {
       await c.query("SELECT pg_advisory_xact_lock(71622)");
       await c.query(
-        "INSERT INTO initial_holdings(symbol,quantity,total_cost) VALUES ($1,$2,$3) ON CONFLICT(symbol) DO UPDATE SET quantity=EXCLUDED.quantity,total_cost=EXCLUDED.total_cost",
-        [symbol, v.quantity, v.total_cost],
+        "INSERT INTO initial_holdings(symbol,quantity,total_cost,basis_is_reference) VALUES ($1,$2,$3,$4) ON CONFLICT(symbol) DO UPDATE SET quantity=EXCLUDED.quantity,total_cost=EXCLUDED.total_cost,basis_is_reference=EXCLUDED.basis_is_reference",
+        [symbol, v.quantity, v.total_cost, v.basis_is_reference],
       );
       portfolio([
         ...(await initialTrades(c)),
