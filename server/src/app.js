@@ -87,6 +87,7 @@ export function createApp(db, config) {
           await c.query("SELECT *,next_date::text FROM recurring_rules")
         ).rows,
         trades: (await c.query("SELECT *,date::text FROM trades")).rows,
+        dividends: (await c.query("SELECT *,date::text FROM dividends")).rows,
         watchlist: (await c.query("SELECT * FROM watchlist")).rows,
         goals: (
           await c.query("SELECT *,deadline::text,created_at::text FROM goals")
@@ -131,7 +132,7 @@ export function createApp(db, config) {
       throw fail("Contraseña incorrecta.", 403);
     await db.tx((c) =>
       c.query(
-        "TRUNCATE goal_contributions,goals,trades,transactions,transfers,recurring_rules,budgets,accounts,watchlist,quote_cache,snapshots,news_cache RESTART IDENTITY CASCADE",
+        "TRUNCATE goal_contributions,goals,dividends,trades,transactions,transfers,recurring_rules,budgets,accounts,watchlist,quote_cache,snapshots,news_cache RESTART IDENTITY CASCADE",
       ),
     );
     res.json({ ok: true });
@@ -147,19 +148,15 @@ export function createApp(db, config) {
   app.use((err, req, res, next) => {
     if (res.headersSent) return next(err);
     if (err instanceof z.ZodError)
-      return res
-        .status(400)
-        .json({
-          error: err.issues
-            .map((i) => `${i.path.join(".")}: ${i.message}`)
-            .join("; "),
-        });
+      return res.status(400).json({
+        error: err.issues
+          .map((i) => `${i.path.join(".")}: ${i.message}`)
+          .join("; "),
+      });
     if (err.code === "23503")
-      return res
-        .status(409)
-        .json({
-          error: "El registro está en uso o la cuenta/categoría ya no existe.",
-        });
+      return res.status(409).json({
+        error: "El registro está en uso o la cuenta/categoría ya no existe.",
+      });
     if (err.code === "23505")
       return res
         .status(409)
@@ -175,13 +172,11 @@ export function createApp(db, config) {
         .status(400)
         .json({ error: "El formato de la solicitud no es válido." });
     if (!err.status) console.error("Error interno:", err.code || err.name);
-    res
-      .status(err.status || 500)
-      .json({
-        error: err.status
-          ? err.message
-          : "No pudimos completar la operación. Inténtalo de nuevo.",
-      });
+    res.status(err.status || 500).json({
+      error: err.status
+        ? err.message
+        : "No pudimos completar la operación. Inténtalo de nuevo.",
+    });
   });
   return { app, market };
 }

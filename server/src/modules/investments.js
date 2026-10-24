@@ -10,10 +10,19 @@ import {
   amountSchema,
   nonnegative,
   pastDate,
+  dateSchema,
   fail,
   today,
 } from "../lib.js";
 export async function investments(db) {
+  const dividends = (
+    await db.query(
+      "SELECT d.*,d.date::text,a.name AS account FROM dividends d JOIN accounts a ON a.id=d.account_id ORDER BY d.date DESC,d.id DESC",
+    )
+  ).rows.map((d) => ({ ...d, paid: d.date <= today() }));
+  const paidDividends = sum(
+    dividends.filter((d) => d.paid).map((d) => d.amount),
+  );
   const trades = (
     await db.query("SELECT *,date::text FROM trades ORDER BY trades.date,id")
   ).rows;
@@ -31,14 +40,52 @@ export async function investments(db) {
       weight: value.gt(0) ? D(p.value).div(value).mul(100).toNumber() : 0,
     })),
     trades,
+    dividends,
+    dividends_total: money(paidDividends),
+    dividends_pending: money(
+      sum(dividends.filter((d) => !d.paid).map((d) => d.amount)),
+    ),
     value: money(value),
-    realized: money(sum(positions.map((p) => p.realized))),
+    realized: money(sum(positions.map((p) => p.realized)).plus(paidDividends)),
     unrealized: money(sum(positions.map((p) => p.unrealized))),
     cost: money(sum(positions.map((p) => p.cost))),
   };
 }
 export function investmentRouter(db, market) {
   const r = Router();
+  const dividendSchema = z
+    .object({
+      symbol: symbolSchema,
+      amount: amountSchema,
+      date: dateSchema,
+      account_id: idSchema,
+      note: z.string().trim().max(500).default(""),
+    })
+    .strict();
+  async function saveDividend(req, res) {
+    const v = dividendSchema.parse(req.body);
+    const id = req.params.id ? idSchema.parse(req.params.id) : null;
+    const q = id
+      ? await db.query(
+          "UPDATE dividends SET symbol=$1,amount=$2,date=$3,account_id=$4,note=$5 WHERE id=$6 RETURNING *",
+          [v.symbol, v.amount, v.date, v.account_id, v.note, id],
+        )
+      : await db.query(
+          "INSERT INTO dividends(symbol,amount,date,account_id,note) VALUES ($1,$2,$3,$4,$5) RETURNING *",
+          [v.symbol, v.amount, v.date, v.account_id, v.note],
+        );
+    if (!q.rows.length) throw fail("Dividendo no encontrado.", 404);
+    res.status(id ? 200 : 201).json(q.rows[0]);
+  }
+  r.post("/dividends", saveDividend);
+  r.put("/dividends/:id", saveDividend);
+  r.delete("/dividends/:id", async (req, res) => {
+    const q = await db.query("DELETE FROM dividends WHERE id=$1 RETURNING id", [
+      idSchema.parse(req.params.id),
+    ]);
+    if (!q.rows.length) throw fail("Dividendo no encontrado.", 404);
+    res.json({ ok: true });
+  });
   r.get("/stocks/search", async (req, res) => {
     const query = z.string().trim().min(2).max(80).parse(req.query.q);
     res.json(await market.search(query));

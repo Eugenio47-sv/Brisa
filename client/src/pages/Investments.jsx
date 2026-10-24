@@ -55,6 +55,71 @@ export default function Investments({ data, mutate, setModal, notify, user }) {
         />
       ),
     });
+  const dividendForm = (item = null) =>
+    setModal({
+      title: item ? "Editar dividendo" : "Registrar dividendo",
+      content: (
+        <Form
+          onSubmit={async (v) => {
+            await mutate(
+              "/dividends" + (item ? "/" + item.id : ""),
+              { ...v, account_id: Number(v.account_id) },
+              item ? "PUT" : "POST",
+            );
+            setModal(null);
+            notify(
+              "Dividendo guardado. Se aplica automáticamente en su fecha de cobro.",
+            );
+          }}
+        >
+          <Field
+            label="Símbolo de la acción o ETF"
+            name="symbol"
+            defaultValue={item?.symbol}
+            placeholder="AAPL"
+            maxLength={20}
+            required
+            list="dividend-symbols"
+          />
+          <datalist id="dividend-symbols">
+            {inv.positions.map((p) => (
+              <option key={p.symbol} value={p.symbol} />
+            ))}
+          </datalist>
+          <MoneyField
+            label="Importe neto que recibes, después de retenciones (USD)"
+            name="amount"
+            defaultValue={item?.amount}
+          />
+          <Field
+            label="Fecha de cobro"
+            type="date"
+            name="date"
+            defaultValue={item?.date || dateNow()}
+            required
+          />
+          <AccountSelect
+            accounts={data.accounts}
+            label="Cuenta donde recibes el dividendo"
+            name="account_id"
+            defaultValue={item?.account_id}
+          />
+          <Field
+            label="Nota (opcional)"
+            name="note"
+            maxLength={500}
+            defaultValue={item?.note}
+          />
+          <p className="hint">
+            Al llegar la fecha indicada, se suma una sola vez al saldo de la
+            cuenta, a los ingresos del mes y al rendimiento realizado. Un pago
+            futuro queda programado. Brisa no verifica el depósito con tu
+            bróker; registra el importe real y corrige la fecha si cambia. No lo
+            registres además como otro ingreso.
+          </p>
+        </Form>
+      ),
+    });
   const addWatch = () =>
     setModal({
       title: "Seguir una acción",
@@ -111,7 +176,7 @@ export default function Investments({ data, mutate, setModal, notify, user }) {
           label="Ganancia realizada"
           value={inv.realized}
           positive={Number(inv.realized) >= 0}
-          foot="Operaciones de venta"
+          foot="Ventas + dividendos cobrados"
         />
       </div>
       <Card
@@ -244,7 +309,7 @@ export default function Investments({ data, mutate, setModal, notify, user }) {
         <Card title="Resultado acumulado">
           <p className="hint">
             Ganancias realizadas + no realizadas. Los aportes no se confunden
-            con rendimientos. No incluye dividendos.
+            con rendimientos. Incluye dividendos cobrados.
           </p>
           <WealthChart snapshots={data.snapshots} field="profit" />
         </Card>
@@ -287,6 +352,75 @@ export default function Investments({ data, mutate, setModal, notify, user }) {
         ) : (
           <Empty title="Observa antes de decidir">
             Sigue acciones sin necesidad de comprarlas.
+          </Empty>
+        )}
+      </Card>
+      <Card
+        title="Dividendos"
+        className="section-gap"
+        action={
+          <button className="primary" onClick={() => dividendForm()}>
+            <Plus size={16} /> Registrar dividendo
+          </button>
+        }
+      >
+        <p>
+          Cobrados: <strong>{usd(inv.dividends_total || 0)}</strong> ·
+          Programados: <strong>{usd(inv.dividends_pending || 0)}</strong>
+        </p>
+        <p className="hint">
+          Los pagos que registres se aplican automáticamente en su fecha de
+          cobro. No se consultan ni se confirman depósitos en tu bróker.
+        </p>
+        {inv.dividends?.length ? (
+          inv.dividends.map((d) => (
+            <div className="list-row" key={d.id}>
+              <div>
+                <strong>{d.symbol}</strong>
+                <small>
+                  {d.date} · {d.account} ·{" "}
+                  {d.paid ? "Aplicado al saldo" : "Programado"}
+                </small>
+                {d.note && <small>{d.note}</small>}
+              </div>
+              <strong>{usd(d.amount)}</strong>
+              <button className="text-button" onClick={() => dividendForm(d)}>
+                Editar
+              </button>
+              <button
+                className="text-button negative"
+                onClick={() =>
+                  setModal({
+                    title: "Eliminar dividendo",
+                    content: (
+                      <Form
+                        submit="Eliminar"
+                        onSubmit={async () => {
+                          await mutate(
+                            "/dividends/" + d.id,
+                            undefined,
+                            "DELETE",
+                          );
+                          setModal(null);
+                        }}
+                      >
+                        <p>
+                          Se quitará este dividendo de {usd(d.amount)}. Se
+                          recalcularán la cuenta, los ingresos y el rendimiento.
+                        </p>
+                      </Form>
+                    ),
+                  })
+                }
+              >
+                Eliminar
+              </button>
+            </div>
+          ))
+        ) : (
+          <Empty title="Aún no has registrado dividendos">
+            Agrega un pago recibido o programa uno con la fecha de cobro
+            confirmada por tu bróker.
           </Empty>
         )}
       </Card>

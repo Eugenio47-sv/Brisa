@@ -31,9 +31,17 @@ export async function dashboard(db, month = today().slice(0, 7)) {
       [prev, start],
     )
   ).rows[0].total;
+  const monthlyDividends = (
+    await db.query(
+      "SELECT COALESCE(sum(amount),0)::text AS total FROM dividends WHERE date >= $1 AND date < $2 AND date <= $3",
+      [start, end, today()],
+    )
+  ).rows[0].total;
   const expenses = rows.filter((t) => t.type === "expense"),
     spent = sum(expenses.map((t) => t.amount)),
-    income = sum(rows.filter((t) => t.type === "income").map((t) => t.amount));
+    income = sum(
+      rows.filter((t) => t.type === "income").map((t) => t.amount),
+    ).plus(monthlyDividends);
   const categoryMap = {};
   for (const t of expenses) {
     const key = t.category_id || 0;
