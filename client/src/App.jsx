@@ -89,7 +89,14 @@ export default function App() {
     if (user) {
       void reload();
       const t = setInterval(reload, 180000);
-      return () => clearInterval(t);
+      const onVisible = () => {
+        if (document.visibilityState === "visible") void reload();
+      };
+      document.addEventListener("visibilitychange", onVisible);
+      return () => {
+        clearInterval(t);
+        document.removeEventListener("visibilitychange", onVisible);
+      };
     }
   }, [user, reload]);
   useEffect(() => {

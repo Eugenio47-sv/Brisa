@@ -60,7 +60,16 @@ export function createApp(db, config) {
       .object({ month: monthSchema.optional() })
       .strict()
       .parse(req.query);
-    res.json(await dashboard(db, v.month));
+    const marketUpdate = await market
+      .refresh()
+      .catch(() => ({
+        message:
+          "No se pudieron consultar precios nuevos; se muestra la última cotización guardada.",
+      }));
+    res.json({
+      ...(await dashboard(db, v.month)),
+      market_update: marketUpdate,
+    });
   });
   app.use(
     "/api",

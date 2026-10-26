@@ -244,6 +244,11 @@ export default function Investments({ data, mutate, setModal, notify, user }) {
         </div>
       )}
       {error && <p className="error">{error}</p>}
+      {user.quotesEnabled && data.market_update?.message && (
+        <p className="hint" role="status">
+          {data.market_update.message}
+        </p>
+      )}
       <div className="stats-grid">
         <Stat
           label="Valor del portafolio"
@@ -352,13 +357,18 @@ export default function Investments({ data, mutate, setModal, notify, user }) {
                           ? "Sin cotización disponible"
                           : p.estimated
                             ? "Estimado al costo"
-                            : timeLabel(p.quote.updated_at)}
+                            : "Cotización: " +
+                              timeLabel(
+                                p.quote.data?.t
+                                  ? new Date(p.quote.data.t * 1000)
+                                  : p.quote.updated_at,
+                              )}
                       </small>
                       {p.quote &&
                         Date.now() - new Date(p.quote.updated_at).getTime() >
                           5 * 60000 && (
                           <small className="warning-text">
-                            Último precio guardado
+                            Consultado: {timeLabel(p.quote.updated_at)}
                           </small>
                         )}
                     </td>

@@ -1,6 +1,7 @@
 import { fail, today } from "../lib.js";
 export function createMarket(db, config, fetcher = fetch) {
   let refreshing = false;
+  let refreshPromise = null;
   async function request(path, params = {}) {
     if (!config.FINNHUB_API_KEY)
       throw fail("Configura FINNHUB_API_KEY para consultar el mercado.", 503);
@@ -76,6 +77,15 @@ export function createMarket(db, config, fetcher = fetch) {
     );
   }
   async function refresh() {
+    if (refreshPromise) return refreshPromise;
+    refreshPromise = performRefresh();
+    try {
+      return await refreshPromise;
+    } finally {
+      refreshPromise = null;
+    }
+  }
+  async function performRefresh() {
     if (refreshing) return { message: "La actualización ya está en curso." };
     refreshing = true;
     try {
@@ -86,12 +96,6 @@ export function createMarket(db, config, fetcher = fetch) {
       const status = await cached("market-status", 120000, () =>
         request("stock/market-status", { exchange: "US" }),
       );
-      if (status.stale)
-        return {
-          message: status.stale
-            ? "No se pudo verificar si el mercado está abierto. Se conservan los precios."
-            : "El mercado de EE. UU. está cerrado. Se conservan los últimos precios.",
-        };
       const symbols = (
         await db.query(
           "SELECT symbol FROM trades UNION SELECT symbol FROM watchlist UNION SELECT symbol FROM initial_holdings",
@@ -105,11 +109,7 @@ export function createMarket(db, config, fetcher = fetch) {
             symbol,
           ])
         ).rows[0];
-        if (
-          old &&
-          (!status.data.isOpen ||
-            Date.now() - new Date(old.updated_at).getTime() < 180000)
-        )
+        if (old && Date.now() - new Date(old.updated_at).getTime() < 180000)
           continue;
         try {
           const q = await request("quote", { symbol });
@@ -131,12 +131,12 @@ export function createMarket(db, config, fetcher = fetch) {
       return {
         updated,
         errors,
-        message:
-          !status.data.isOpen && !updated && !errors
-            ? "El mercado de EE. UU. está cerrado. Se conservan los últimos precios."
-            : errors
-              ? `${updated} precios actualizados; ${errors} consultas no disponibles. Se conserva la caché.`
-              : `${updated} precios actualizados.`,
+        message: errors
+          ? `${updated} precios actualizados; ${errors} consultas no disponibles. Se conserva la caché.`
+          : updated
+            ? `${updated} cotizaciones consultadas. Fuera de horario pueden coincidir con el último cierre.`
+            : "Cotizaciones consultadas hace menos de 3 minutos.",
+        market_open: status.stale ? null : status.data.isOpen,
       };
     } finally {
       refreshing = false;

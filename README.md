@@ -240,7 +240,7 @@ Brisa no está vinculada con el bróker: no detecta ni confirma depósitos ni ca
 - **Categoría no se elimina:** aún tiene movimientos, presupuestos o reglas que la referencian.
 - **Venta rechazada:** comprueba que las compras existan antes de la fecha de la venta y que no hayas vendido más de lo disponible.
 - **CSV rechazado:** exporta una tabla de movimientos para obtener los encabezados correctos; revisa fechas, montos e IDs. No se importa ninguna fila si una falla.
-- **No hay cotización:** revisa clave, símbolo, cobertura y horario. La app no fuerza consultas fuera de mercado ni inventa precios actuales.
+- **No hay cotización:** revisa clave, símbolo y cobertura. Brisa consulta cotizaciones al abrir o volver a la web y cada 3 minutos mientras está activa, incluso después del cierre para recuperar el último precio disponible. La hora del precio corresponde a Finnhub y puede ser anterior a la hora de consulta. Render Free duerme tras inactividad: no hay actualización continua mientras el servicio está dormido, y no se inventan movimientos de precios fuera de mercado.
 - **Asesor no disponible:** revisa clave, acceso al modelo, saldo y límite de consultas. Los consejos por reglas siguen funcionando.
 - **Pantalla vacía:** vuelve a compilar; Express necesita `client/dist`. Revisa la conexión y usa Reintentar.
 - **Historial con días ausentes:** el servicio estuvo dormido o detenido. No se reconstruyen cotizaciones de días pasados.
