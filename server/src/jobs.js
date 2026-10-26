@@ -46,7 +46,6 @@ export function startJobs(db, market) {
     if (busy) return;
     busy = true;
     try {
-      await runRecurring(db);
       await market.refresh();
       await snapshot(db);
     } catch {

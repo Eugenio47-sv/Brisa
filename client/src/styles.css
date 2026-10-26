@@ -1770,6 +1770,13 @@ dialog form > p {
   border-radius: 12px;
   padding: 16px;
 }
+.insight-answer {
+  margin-top: 20px;
+  padding: 20px;
+  background: var(--soft);
+  border-radius: 12px;
+  line-height: 1.8;
+}
 .savings-history summary {
   cursor: pointer;
   font-weight: 600;

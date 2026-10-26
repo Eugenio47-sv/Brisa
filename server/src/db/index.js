@@ -112,6 +112,19 @@ export async function migrate(db, hash) {
       );
       await c.query("INSERT INTO schema_migrations(version) VALUES ($1)", [6]);
     }
+    if (
+      !(
+        await c.query(
+          "SELECT version FROM schema_migrations WHERE version=$1",
+          [7],
+        )
+      ).rows.length
+    ) {
+      await c.query(
+        "CREATE TABLE savings_entries (id serial PRIMARY KEY, account_id integer NOT NULL REFERENCES accounts(id), amount numeric(14,2) NOT NULL CHECK(amount<>0), date date NOT NULL, note varchar(500) NOT NULL DEFAULT '')",
+      );
+      await c.query("INSERT INTO schema_migrations(version) VALUES ($1)", [7]);
+    }
     const names = [
       "Comida",
       "Transporte",

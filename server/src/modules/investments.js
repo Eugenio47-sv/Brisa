@@ -61,6 +61,14 @@ export async function investments(db) {
     })),
     trades,
     initial_holdings: initialHoldings,
+    purchases_total: money(
+      sum(
+        trades
+          .filter((t) => t.side === "buy")
+          .map((t) => D(t.quantity).mul(t.price).plus(t.fee)),
+      ),
+    ),
+    initial_basis: money(sum(initialHoldings.map((h) => h.total_cost || "0"))),
     cost_incomplete: positions.some((p) => p.cost_unknown),
     realized_incomplete: positions.some((p) => p.realized === null),
     uses_reference_basis: initialHoldings.some((h) => h.basis_is_reference),

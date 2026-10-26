@@ -12,6 +12,7 @@ import { investmentRouter } from "./modules/investments.js";
 import { savingsRouter } from "./modules/savings.js";
 import { advisorRouter } from "./modules/advisor.js";
 import { createMarket } from "./modules/market.js";
+import { cashRouter } from "./modules/cash.js";
 import { dashboard } from "./modules/dashboard.js";
 import { fail, monthSchema, csvCell } from "./lib.js";
 export function createApp(db, config) {
@@ -60,12 +61,10 @@ export function createApp(db, config) {
       .object({ month: monthSchema.optional() })
       .strict()
       .parse(req.query);
-    const marketUpdate = await market
-      .refresh()
-      .catch(() => ({
-        message:
-          "No se pudieron consultar precios nuevos; se muestra la última cotización guardada.",
-      }));
+    const marketUpdate = await market.refresh().catch(() => ({
+      message:
+        "No se pudieron consultar precios nuevos; se muestra la última cotización guardada.",
+    }));
     res.json({
       ...(await dashboard(db, v.month)),
       market_update: marketUpdate,
@@ -76,6 +75,7 @@ export function createApp(db, config) {
     ledgerRouter(db),
     investmentRouter(db, market),
     savingsRouter(db),
+    cashRouter(db),
     advisorRouter(db, config, market),
   );
   app.get("/api/export", async (req, res) => {
@@ -87,6 +87,9 @@ export function createApp(db, config) {
       await c.query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ");
       return {
         accounts: (await c.query("SELECT * FROM accounts")).rows,
+        savings_entries: (
+          await c.query("SELECT *,date::text FROM savings_entries")
+        ).rows,
         categories: (await c.query("SELECT * FROM categories")).rows,
         transactions: (await c.query("SELECT *,date::text FROM transactions"))
           .rows,
@@ -143,7 +146,7 @@ export function createApp(db, config) {
       throw fail("Contraseña incorrecta.", 403);
     await db.tx((c) =>
       c.query(
-        "TRUNCATE goal_contributions,goals,initial_holdings,dividends,trades,transactions,transfers,recurring_rules,budgets,accounts,watchlist,quote_cache,snapshots,news_cache RESTART IDENTITY CASCADE",
+        "TRUNCATE goal_contributions,goals,savings_entries,initial_holdings,dividends,trades,transactions,transfers,recurring_rules,budgets,accounts,watchlist,quote_cache,snapshots,news_cache RESTART IDENTITY CASCADE",
       ),
     );
     res.json({ ok: true });

@@ -12,19 +12,27 @@ import {
 } from "../components";
 import { api, usd, dateNow, types } from "../lib";
 import { AccountForm } from "../App";
+import MoneyEntryForm from "../MoneyEntryForm";
 
-export default function Savings({ data, mutate, setModal, notify }) {
-  const [section, setSection] = useState("accounts");
+export default function Savings({ data, mutate, setModal, notify, view }) {
+  const [localSection, setSection] = useState("accounts");
+  const section = view || localSection;
   const [transfers, setTransfers] = useState([]);
   const [contributions, setContributions] = useState([]);
+  const [cashEntries, setCashEntries] = useState([]);
   const [error, setError] = useState("");
   useEffect(() => {
     let live = true;
-    Promise.all([api("/transfers"), api("/contributions")])
-      .then(([t, c]) => {
+    Promise.all([
+      api("/transfers"),
+      api("/contributions"),
+      api("/cash-entries"),
+    ])
+      .then(([t, c, e]) => {
         if (live) {
           setTransfers(t);
           setContributions(c);
+          setCashEntries(e);
           setError("");
         }
       })
@@ -245,6 +253,25 @@ export default function Savings({ data, mutate, setModal, notify }) {
         </Empty>
       ),
     });
+  const moneyEntry = (item = null) =>
+    setModal({
+      title: item ? "Editar ahorro registrado" : "Agregar o retirar dinero",
+      content: (
+        <MoneyEntryForm
+          accounts={data.accounts}
+          item={item}
+          onAccount={() => accountForm()}
+          onSave={async (v) => {
+            await mutate(
+              "/cash-entries" + (item ? "/" + item.id : ""),
+              v,
+              item ? "PUT" : "POST",
+            );
+            finish("Ahorro actualizado.");
+          }}
+        />
+      ),
+    });
   const goalHistory = (goal) => {
     const rows = contributions.filter((c) => c.goal_id === goal.id);
     setModal({
@@ -300,22 +327,24 @@ export default function Savings({ data, mutate, setModal, notify }) {
   };
   return (
     <>
-      <div className="tabs" aria-label="Organizar ahorros">
-        <button
-          aria-pressed={section === "accounts"}
-          className={section === "accounts" ? "active" : ""}
-          onClick={() => setSection("accounts")}
-        >
-          Cuentas
-        </button>
-        <button
-          aria-pressed={section === "goals"}
-          className={section === "goals" ? "active" : ""}
-          onClick={() => setSection("goals")}
-        >
-          Metas
-        </button>
-      </div>
+      {!view && (
+        <div className="tabs" aria-label="Organizar ahorros">
+          <button
+            aria-pressed={section === "accounts"}
+            className={section === "accounts" ? "active" : ""}
+            onClick={() => setSection("accounts")}
+          >
+            Cuentas
+          </button>
+          <button
+            aria-pressed={section === "goals"}
+            className={section === "goals" ? "active" : ""}
+            onClick={() => setSection("goals")}
+          >
+            Metas
+          </button>
+        </div>
+      )}
       {error && (
         <p className="error" role="alert">
           {error}
@@ -331,12 +360,20 @@ export default function Savings({ data, mutate, setModal, notify }) {
               </p>
             </div>
             <div className="inline-actions">
+              {data.accounts.some((a) => a.type !== "credit") && (
+                <button className="primary" onClick={() => moneyEntry()}>
+                  <Plus size={16} /> Agregar dinero
+                </button>
+              )}
               {data.accounts.length > 1 && (
                 <button className="text-button" onClick={() => transferForm()}>
                   <ArrowLeftRight size={16} /> Transferir
                 </button>
               )}
-              <button className="primary" onClick={() => accountForm()}>
+              <button
+                className={data.accounts.length ? "text-button" : "primary"}
+                onClick={() => accountForm()}
+              >
                 <Plus size={16} /> Agregar cuenta
               </button>
             </div>
@@ -371,6 +408,40 @@ export default function Savings({ data, mutate, setModal, notify }) {
                 efectivo.
               </Empty>
             </Card>
+          )}
+          {cashEntries.length > 0 && (
+            <details className="savings-history section-gap">
+              <summary>Historial de ahorros ({cashEntries.length})</summary>
+              {cashEntries.map((e) => (
+                <div className="list-row" key={e.id}>
+                  <div>
+                    <strong>
+                      {e.note ||
+                        (Number(e.amount) > 0 ? "Dinero agregado" : "Retiro")}
+                    </strong>
+                    <small>
+                      {e.account} · {e.date}
+                    </small>
+                  </div>
+                  <strong>{usd(e.amount)}</strong>
+                  <button className="text-button" onClick={() => moneyEntry(e)}>
+                    Editar
+                  </button>
+                  <button
+                    className="text-button negative"
+                    onClick={() =>
+                      confirmDelete(
+                        "Eliminar registro de ahorro",
+                        "Se recalculará el saldo de la cuenta. No se borrarán otros registros.",
+                        "/cash-entries/" + e.id,
+                      )
+                    }
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              ))}
+            </details>
           )}
           {transfers.length > 0 && (
             <details className="savings-history section-gap">

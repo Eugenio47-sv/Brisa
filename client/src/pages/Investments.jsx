@@ -34,7 +34,19 @@ export default function Investments({ data, mutate, setModal, notify, user }) {
   const addTrade = (item = null) =>
     setModal({
       title: item ? "Editar operación" : "Registrar compra o venta",
-      content: (
+      content: !data.accounts.length ? (
+        <Empty title="Primero agrega una cuenta">
+          <p>
+            Registra tu banco o efectivo para indicar de dónde sale esta compra.
+          </p>
+          <button
+            className="primary"
+            onClick={() => setModal({ type: "account" })}
+          >
+            Agregar cuenta
+          </button>
+        </Empty>
+      ) : (
         <TradeForm
           accounts={data.accounts}
           item={item}
@@ -311,7 +323,7 @@ export default function Investments({ data, mutate, setModal, notify, user }) {
               <RefreshCw size={16} className={busy ? "spin" : ""} /> Actualizar
             </button>
             <button className="primary" onClick={() => addTrade()}>
-              <Plus size={16} /> Operación
+              <Plus size={16} /> Agregar inversión
             </button>
           </div>
         }

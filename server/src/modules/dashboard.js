@@ -196,6 +196,8 @@ export async function dashboard(db, month = today().slice(0, 7)) {
   return {
     month,
     accounts: acc,
+    cash_total: money(sum(acc.map((a) => a.balance))),
+    saved_for_goals: money(sum(goalRows.map((g) => g.saved))),
     net_worth: money(net),
     month_change: base ? money(net.minus(base.net_worth)) : null,
     income: money(income),

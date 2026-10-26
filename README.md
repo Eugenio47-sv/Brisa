@@ -221,6 +221,14 @@ Se verifican: promedio y comisiones, ventas inválidas, precisión decimal, pres
 
 Controles: Helmet/CSP, origen exacto y protección CSRF por comprobación de Origin en escrituras (también login), JWT en cookie, sesiones revocables en PostgreSQL, bcrypt, límites de solicitudes y login, validación Zod y consultas parametrizadas. Los únicos fragmentos SQL compartidos son textos constantes controlados por el código, nunca valores enviados por el usuario. El limitador de login es por proceso; este despliegue personal supone una sola instancia de Render. Todas las rutas `/api` salvo login requieren sesión. No hay un endpoint de salud público.
 
+## Flujo actual: inversiones, ahorros y metas
+
+La navegación está centrada en Inicio, Inversiones, Ahorros, Metas y Más. Gastos y sus categorías ya no forman parte de la interfaz; los registros anteriores se conservan para mantener los saldos y respaldos existentes. Las antiguas reglas de ingresos/gastos recurrentes se conservan en el respaldo pero ya no se ejecutan automáticamente.
+
+En Inversiones registra una compra adicional con unidades, importe pagado, fecha y cuenta de origen. Se descuenta de esa cuenta y se recalculan las posiciones. En Ahorros registra depósitos o retiros de dinero nuevo y conserva su historial editable; para moverlo entre cuentas usa Transferir. Reservar dinero para una meta no crea un segundo saldo.
+
+Noticias incluye tenencias iniciales y seguimiento; cuando no hay titulares para un ETF se muestran noticias generales identificadas como tales. Mi resumen responde sobre los importes y metas registrados, sin requerir una clave de chat externo.
+
 ## Cuentas y metas
 
 Ahorros tiene dos apartados: Cuentas y Metas. En Cuentas se agregan y editan saldos iniciales, y se transfieren fondos entre cuentas; su historial permanece plegado. En Metas se crean objetivos y se registra ahorro desde cualquier cuenta con saldo disponible, excepto tarjetas de crédito. Un aporte reserva dinero existente: no descuenta otra vez del saldo ni crea ingresos ficticios. Los aportes y retiros se consultan y corrigen dentro de cada meta. Las acciones de eliminar una cuenta o meta están dentro de su edición y requieren confirmación.

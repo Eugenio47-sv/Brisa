@@ -49,6 +49,7 @@ export async function accounts(db) {
       `SELECT a.*, (a.opening_balance
     + COALESCE((SELECT sum(CASE WHEN type='income' THEN amount ELSE -amount END) FROM transactions WHERE account_id=a.id),0)
     + COALESCE((SELECT sum(amount) FROM transfers WHERE to_id=a.id),0)
+    + COALESCE((SELECT sum(amount) FROM savings_entries WHERE account_id=a.id),0)
     - COALESCE((SELECT sum(amount) FROM transfers WHERE from_id=a.id),0)
     + COALESCE((SELECT sum(CASE WHEN side='sell' THEN round(quantity*price-fee,2) ELSE -round(quantity*price+fee,2) END) FROM trades WHERE account_id=a.id),0)
     + COALESCE((SELECT sum(amount) FROM dividends WHERE account_id=a.id AND date <= $1::date),0))::text AS balance

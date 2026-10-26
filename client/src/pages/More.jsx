@@ -15,6 +15,7 @@ import {
 import { api, usd, legal, download, timeLabel } from "../lib";
 import { Card, Form, Field, Select, Empty, Loading } from "../components";
 import { AccountForm } from "../App";
+import Insights from "./Insights";
 const lessons = [
   [
     "Acción",
@@ -64,7 +65,7 @@ export default function More(props) {
       <div className="tabs more-tabs">
         {[
           ["news", "Noticias", Newspaper],
-          ["advisor", "Consejos", MessageCircle],
+          ["advisor", "Mi resumen", MessageCircle],
           ["learn", "Aprende", BookOpen],
           ["calculators", "Calculadoras", Calculator],
           ["settings", "Ajustes", Settings],
@@ -80,7 +81,7 @@ export default function More(props) {
         ))}
       </div>
       {section === "news" && <News />}
-      {section === "advisor" && <Advisor {...props} />}
+      {section === "advisor" && <Insights {...props} />}
       {section === "learn" && (
         <div className="lesson-grid">
           {lessons.map(([title, text], i) => (
@@ -101,6 +102,7 @@ export default function More(props) {
 }
 function News() {
   const [filter, setFilter] = useState("general"),
+    [attempt, setAttempt] = useState(0),
     [data, setData] = useState(null),
     [error, setError] = useState("");
   useEffect(() => {
@@ -113,7 +115,7 @@ function News() {
     return () => {
       active = false;
     };
-  }, [filter]);
+  }, [filter, attempt]);
   return (
     <>
       <div className="inline-actions section-gap">
@@ -131,6 +133,9 @@ function News() {
           </button>
         ))}
       </div>
+      <button className="text-button" onClick={() => setAttempt((n) => n + 1)}>
+        Volver a consultar noticias
+      </button>
       <p className="hint">
         Titulares y resúmenes en el idioma de la fuente. Economía filtra las
         noticias generales por temas económicos.
@@ -141,7 +146,18 @@ function News() {
       ) : (
         data && (
           <>
-            {data.message && <p className="alert warning">{data.message}</p>}
+            {data.symbols?.length > 0 && (
+              <p className="hint">
+                Activos detectados: {data.symbols.join(", ")}
+              </p>
+            )}
+            {data.message && (
+              <p className="hint">
+                {data.message.includes("FINNHUB_API_KEY")
+                  ? "El servicio de noticias no está disponible ahora. Puedes consultar las fuentes directamente."
+                  : data.message}
+              </p>
+            )}
             {data.stale && (
               <p className="hint">
                 Se muestra la última información guardada, si está disponible.
@@ -170,7 +186,16 @@ function News() {
             {!data.data.length && (
               <Card>
                 <Empty title="No hay noticias disponibles">
-                  Prueba otro filtro o revisa la configuración de Finnhub.
+                  El proveedor no devolvió titulares para este filtro. Puedes
+                  volver a consultar o leer el mercado en las fuentes.
+                  <a
+                    className="text-button"
+                    href="https://www.reuters.com/markets/"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Abrir noticias del mercado <ExternalLink size={15} />
+                  </a>
                 </Empty>
               </Card>
             )}
@@ -590,7 +615,6 @@ function SettingsPage({
                 "brisa-completo.csv",
                 "Todas las tablas CSV",
               ],
-              ["/transactions.csv", "movimientos.csv", "Movimientos CSV"],
             ].map(([path, name, label]) => (
               <button
                 key={path}
@@ -610,62 +634,13 @@ function SettingsPage({
         </Card>
       </div>
       <Card
-        title="Categorías"
-        action={
-          <button className="text-button" onClick={() => category()}>
-            <Plus size={17} /> Agregar
-          </button>
-        }
-        className="section-gap"
-      >
-        <div className="category-grid">
-          {categories.map((c) => (
-            <div className="category-item" key={c.id}>
-              <span style={{ color: c.color }}>{c.icon}</span>
-              <strong>{c.name}</strong>
-              <button className="text-button" onClick={() => category(c)}>
-                Editar
-              </button>
-              <button
-                className="text-button negative"
-                aria-label={"Eliminar " + c.name}
-                onClick={() =>
-                  setModal({
-                    title: "Eliminar categoría",
-                    content: (
-                      <Form
-                        submit="Eliminar"
-                        onSubmit={async () => {
-                          await mutate(
-                            "/categories/" + c.id,
-                            undefined,
-                            "DELETE",
-                          );
-                          setModal(null);
-                        }}
-                      >
-                        <p>
-                          Se puede eliminar únicamente si no está en uso por
-                          movimientos, presupuestos o recurrencias.
-                        </p>
-                      </Form>
-                    ),
-                  })
-                }
-              >
-                ×
-              </button>
-            </div>
-          ))}
-        </div>
-      </Card>
-      <Card
         title="Borrar datos financieros"
         className="danger-zone section-gap"
       >
         <p>
-          Elimina cuentas, movimientos, operaciones, metas e historial. Conserva
-          tu contraseña y categorías. Esta acción no se puede deshacer.
+          Elimina tus registros de ahorro, cuentas, inversiones, dividendos,
+          metas e historial. Conserva tu acceso. Esta acción no se puede
+          deshacer.
         </p>
         <button
           className="danger"

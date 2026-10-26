@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Bell,
   Wallet,
+  Target,
 } from "lucide-react";
 import { api, dateNow, usd } from "./lib";
 import {
@@ -27,16 +28,16 @@ import {
   CategorySelect,
   Select,
 } from "./components";
-import Overview from "./pages/Overview";
-import Expenses from "./pages/Expenses";
+import Overview from "./pages/AssetOverview";
+import MoneyEntryForm from "./MoneyEntryForm";
 import Investments from "./pages/Investments";
 import Savings from "./pages/Savings";
 import More from "./pages/More";
 const tabs = [
   ["home", "Inicio", LayoutDashboard],
-  ["expenses", "Gastos", ArrowLeftRight],
   ["investments", "Inversiones", ChartNoAxesCombined],
   ["savings", "Ahorros", PiggyBank],
+  ["goals", "Metas", Target],
   ["more", "Más", Ellipsis],
 ];
 export default function App() {
@@ -45,7 +46,6 @@ export default function App() {
     [authError, setAuthError] = useState(""),
     [tab, setTab] = useState("home"),
     [data, setData] = useState(null),
-    [categories, setCategories] = useState([]),
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
     [modal, setModal] = useState(null),
@@ -74,9 +74,8 @@ export default function App() {
   const reload = useCallback(async () => {
     setRefreshing(true);
     try {
-      const [d, c] = await Promise.all([api("/dashboard"), api("/categories")]);
+      const d = await api("/dashboard");
       setData(d);
-      setCategories(c);
       setError("");
     } catch (e) {
       if (e.status === 401) setUser(null);
@@ -117,7 +116,6 @@ export default function App() {
   };
   const ctx = {
     data,
-    categories,
     mutate,
     reload,
     notify: setNotice,
@@ -253,23 +251,6 @@ export default function App() {
             <span className="currency">
               USD <span>·</span> El Salvador
             </span>
-            <button
-              className="notification"
-              aria-label="Ver alertas"
-              onClick={() => {
-                setTab("home");
-                setTimeout(
-                  () =>
-                    document
-                      .getElementById("alerts")
-                      ?.scrollIntoView({ behavior: "smooth" }),
-                  100,
-                );
-              }}
-            >
-              <Bell size={19} />
-              {data?.alerts.length > 0 && <i />}
-            </button>
             <span className="avatar">YO</span>
           </div>
         </header>
@@ -295,9 +276,9 @@ export default function App() {
                 {
                   {
                     home: "Tu panorama, más claro.",
-                    expenses: "Cada movimiento cuenta.",
                     investments: "Invierte con perspectiva.",
-                    savings: "Tus cuentas y tus metas.",
+                    savings: "Tu dinero ahorrado.",
+                    goals: "Lo que quieres lograr.",
                     more: "Un poco más de claridad.",
                   }[tab]
                 }
@@ -306,22 +287,20 @@ export default function App() {
                 {
                   {
                     home: "Todo lo que necesitas para dar tu próximo paso.",
-                    expenses:
-                      "Conoce a dónde va tu dinero y decide con intención.",
                     investments: "Sigue tus activos, entiende tus resultados.",
-                    savings:
-                      "Organiza tu dinero y avanza hacia lo que quieres lograr.",
+                    savings: "Banco y efectivo, en un solo lugar.",
+                    goals: "Reserva tus ahorros para tus próximos planes.",
                     more: "Información, herramientas y un espacio a tu medida.",
                   }[tab]
                 }
               </p>
             </div>
-            {tab !== "savings" && (
+            {tab === "home" && (
               <button
                 className="primary desktop-add"
-                onClick={() => setModal({ type: "transaction" })}
+                onClick={() => setModal({ type: "saving-entry" })}
               >
-                <Plus size={18} /> Nuevo movimiento
+                <Plus size={18} /> Agregar dinero
               </button>
             )}
           </div>
@@ -339,9 +318,9 @@ export default function App() {
                 {refreshing ? "Actualizando" : ""}
               </div>
               {tab === "home" && <Overview {...ctx} />}
-              {tab === "expenses" && <Expenses {...ctx} />}
               {tab === "investments" && <Investments {...ctx} />}
-              {tab === "savings" && <Savings {...ctx} />}
+              {tab === "savings" && <Savings {...ctx} view="accounts" />}
+              {tab === "goals" && <Savings {...ctx} view="goals" />}
               {tab === "more" && <More {...ctx} />}
             </>
           )}
@@ -362,11 +341,11 @@ export default function App() {
           </button>
         ))}
       </nav>
-      {tab !== "savings" && (
+      {tab === "home" && (
         <button
           className="fab"
-          aria-label="Registrar movimiento"
-          onClick={() => setModal({ type: "transaction" })}
+          aria-label="Agregar dinero ahorrado"
+          onClick={() => setModal({ type: "saving-entry" })}
         >
           <Plus />
         </button>
@@ -379,29 +358,19 @@ export default function App() {
       {modal && (
         <Modal
           title={
-            modal.type === "transaction"
-              ? modal.item
-                ? "Editar movimiento"
-                : "Nuevo movimiento"
+            modal.type === "saving-entry"
+              ? "Registrar ahorro"
               : modal.type === "account"
                 ? "Nueva cuenta"
                 : modal.title || "Confirmar"
           }
           onClose={() => setModal(null)}
         >
-          {modal.type === "transaction" ? (
-            <TransactionForm
-              data={data}
-              categories={categories}
-              item={modal.item}
-              onSave={(v) =>
-                done(
-                  "/transactions" + (modal.item ? "/" + modal.item.id : ""),
-                  v,
-                  modal.item ? "PUT" : "POST",
-                )
-              }
+          {modal.type === "saving-entry" ? (
+            <MoneyEntryForm
+              accounts={data.accounts}
               onAccount={() => setModal({ type: "account" })}
+              onSave={(v) => done("/cash-entries", v)}
             />
           ) : modal.type === "account" ? (
             <AccountForm onSave={(v) => done("/accounts", v)} />
@@ -427,8 +396,12 @@ export function AccountForm({ onSave, item }) {
         <option value="bank">Banco</option>
         <option value="cash">Efectivo</option>
         <option value="savings">Ahorro</option>
-        <option value="emergency">Fondo de emergencia</option>
-        <option value="credit">Tarjeta de crédito</option>
+        {item?.type === "emergency" && (
+          <option value="emergency">Fondo de emergencia</option>
+        )}
+        {item?.type === "credit" && (
+          <option value="credit">Tarjeta de crédito</option>
+        )}
       </Select>
       <MoneyField
         label="Saldo inicial (deuda como número negativo)"

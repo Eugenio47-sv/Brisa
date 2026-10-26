@@ -15,14 +15,26 @@ export function advisorRouter(db, config, market) {
     if (filter === "portfolio") {
       const symbols = (
         await db.query(
-          "SELECT symbol FROM trades UNION SELECT symbol FROM watchlist LIMIT 12",
+          "SELECT symbol FROM trades UNION SELECT symbol FROM watchlist UNION SELECT symbol FROM initial_holdings ORDER BY symbol LIMIT 12",
         )
       ).rows;
       const batches = [];
       for (const s of symbols) batches.push(await market.news(s.symbol));
       const unique = new Map();
       for (const b of batches) for (const n of b.data) unique.set(n.id, n);
+      if (symbols.length && !unique.size) {
+        const fallback = await market.news();
+        return res.json({
+          ...fallback,
+          symbols: symbols.map((s) => s.symbol),
+          fallback: true,
+          message:
+            fallback.message ||
+            "El proveedor no tiene titulares específicos para estos activos. Se muestran noticias del mercado.",
+        });
+      }
       res.json({
+        symbols: symbols.map((s) => s.symbol),
         data: [...unique.values()].sort((a, b) => b.datetime - a.datetime),
         stale: batches.some((b) => b.stale),
         message:
